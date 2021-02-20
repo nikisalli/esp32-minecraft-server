@@ -59,7 +59,7 @@ void minecraft::writeLoginSuccess(){
 }
 
 void minecraft::writeChunk(){
-    writeVarInt(11+638+1026+2+2774+1); // entire packet length 
+    writeVarInt(11+322+1026+2+2774+1); // entire packet length 
     // LENGTH 1+4+4+1+1 = 11
     writeVarInt(0x20); 
     writeInt(0); // X
@@ -146,7 +146,7 @@ void minecraft::writeSpawnPlayer(){
 
 void minecraft::writeJoinGame(){
     Serial.println("[INFO] sending join game packet...");
-    writeVarInt(1+4+1+1+1+1+20+30478+268+20+8+1+1+1+1+1+1); // LENGTH
+    writeVarInt(1+4+1+1+1+1+20+1131+268+20+8+1+1+1+1+1+1); // LENGTH
     writeVarInt(0x24);
     writeInt(1); // entity id
     writeBoolean(0); // is hardcore
@@ -179,30 +179,22 @@ void minecraft::writeSubChunk(uint8_t index){
     // data
     writeVarInt(342); // we're sending 342 longs (16x16x16)/12 (one 64 bit long fits 12 5 bit blocks)
 
-    long temp = 0;
+    uint64_t temp = 0;
     uint8_t count = 0;
-    int count2 = 0;
     for(uint8_t i = 16 * index; i < (16 * index + 16); i++){
         for(uint8_t j = 0; j < 16; j++){
             for(uint8_t k = 0; k < 16; k++){
-                temp |= ((long) blocks[chunk[i][j][k]] & 0xff) << count * 5;
+                temp |= ((uint64_t) blocks[chunk[i][j][k]] & 0x1F) << count * 5;
                 count ++;
                 if(count >= 12){
-                    writeLong(temp);
-                    // Serial.print(temp, HEX);
-                    // Serial.print(" ");
+                    writeUnsignedLong(temp);
                     temp = 0;
                     count = 0;
-                    count2++;
                 }
             }
         }
     }
     writeLong(temp);
-    count2++;
-    // Serial.print(temp, HEX);
-    // Serial.println();
-    // Serial.println(count2);
 }
 
 int minecraft::readUnsignedShort(){
@@ -334,7 +326,13 @@ void minecraft::writeString(String str){
 
 void minecraft::writeLong(int64_t num){
     for(int i=7; i>=0; i--){
-        S->write((byte)((num >> (i*8)) & 0xff));
+        S->write((uint8_t)((num >> (i*8)) & 0xff));
+    }
+}
+
+void minecraft::writeUnsignedLong(uint64_t num){
+    for(int i=7; i>=0; i--){
+        S->write((uint8_t)((num >> (i*8)) & 0xff));
     }
 }
 

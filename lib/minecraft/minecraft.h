@@ -56,6 +56,7 @@ class minecraft{
         void writeVarInt        (int32_t value);
         void writeVarLong       (int64_t value);
         void writeString        (String str);
+        void writeUnsignedLong  (uint64_t num);
         void writeUnsignedShort (uint16_t num);
         void writeUnsignedByte  (uint8_t num);
         void writeLong          (int64_t num);
