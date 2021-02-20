@@ -1,0 +1,68 @@
+!_TAG_FILE_FORMAT	2	/extended format; --format=1 will not append ;" to lines/
+!_TAG_FILE_SORTED	1	/0=unsorted, 1=sorted, 2=foldcase/
+!_TAG_OUTPUT_EXCMD	mixed	/number, pattern, mixed, or combineV2/
+!_TAG_OUTPUT_FILESEP	slash	/slash or backslash/
+!_TAG_OUTPUT_MODE	u-ctags	/u-ctags or e-ctags/
+!_TAG_PATTERN_LENGTH_LIMIT	96	/0 for no limit/
+!_TAG_PROC_CWD	/home/nik/Desktop/progetti/esp32-minecraft-server/	//
+!_TAG_PROGRAM_AUTHOR	Universal Ctags Team	//
+!_TAG_PROGRAM_NAME	Universal Ctags	/Derived from Exuberant Ctags/
+!_TAG_PROGRAM_URL	https://ctags.io/	/official site/
+!_TAG_PROGRAM_VERSION	5.9.0	/p5.9.20210110.0/
+MINECRAFT_H	lib/minecraft.h	/^#define MINECRAFT_H$/;"	d
+S	lib/minecraft.h	/^        Stream* S;$/;"	m	class:minecraft	typeref:typename:Stream *
+VarIntLength	lib/minecraft.cpp	/^int minecraft::VarIntLength(int val) {$/;"	f	class:minecraft	typeref:typename:int
+clientStatus	lib/minecraft.cpp	/^void minecraft::clientStatus(uint8_t state){$/;"	f	class:minecraft	typeref:typename:void
+compression_enabled	lib/minecraft.h	/^        bool compression_enabled = 0;$/;"	m	class:minecraft	typeref:typename:bool
+compression_treshold	lib/minecraft.h	/^        int compression_treshold = 0;$/;"	m	class:minecraft	typeref:typename:int
+food	lib/minecraft.h	/^        int food = 0;$/;"	m	class:minecraft	typeref:typename:int
+food_sat	lib/minecraft.h	/^        float food_sat = 0;$/;"	m	class:minecraft	typeref:typename:float
+handShake	lib/minecraft.cpp	/^void minecraft::handShake(uint8_t state){$/;"	f	class:minecraft	typeref:typename:void
+handle	lib/minecraft.cpp	/^void minecraft::handle(){$/;"	f	class:minecraft	typeref:typename:void
+health	lib/minecraft.h	/^        float health = 0;$/;"	m	class:minecraft	typeref:typename:float
+keepAlive	lib/minecraft.cpp	/^void minecraft::keepAlive(uint64_t id){$/;"	f	class:minecraft	typeref:typename:void
+listener	src/main.cpp	/^TaskHandle_t listener;$/;"	v	typeref:typename:TaskHandle_t
+loginStart	lib/minecraft.cpp	/^void minecraft::loginStart(){$/;"	f	class:minecraft	typeref:typename:void
+loop	src/main.cpp	/^void loop(){$/;"	f	typeref:typename:void
+lsr	lib/minecraft.cpp	/^int lsr(int x, int n){$/;"	f	typeref:typename:int
+minecraft	lib/minecraft.cpp	/^minecraft::minecraft(String _username, String _url, uint16_t _port, Stream* __S){$/;"	f	class:minecraft
+minecraft	lib/minecraft.h	/^class minecraft{$/;"	c
+onGround	lib/minecraft.h	/^        bool onGround = true;$/;"	m	class:minecraft	typeref:typename:bool
+password	include/credentials.h	/^const char* password = "12344321";/;"	v	typeref:typename:const char *
+password	include/credentials_edit_me.h	/^const char* password = "pass";/;"	v	typeref:typename:const char *
+ping	lib/minecraft.cpp	/^void minecraft::ping(uint64_t num){$/;"	f	class:minecraft	typeref:typename:void
+pitch	lib/minecraft.h	/^        float pitch = 0;$/;"	m	class:minecraft	typeref:typename:float
+readDouble	lib/minecraft.cpp	/^double minecraft::readDouble(){$/;"	f	class:minecraft	typeref:typename:double
+readFloat	lib/minecraft.cpp	/^float minecraft::readFloat(){$/;"	f	class:minecraft	typeref:typename:float
+readLong	lib/minecraft.cpp	/^long minecraft::readLong(){$/;"	f	class:minecraft	typeref:typename:long
+readString	lib/minecraft.cpp	/^String minecraft::readString(){$/;"	f	class:minecraft	typeref:typename:String
+readVarInt	lib/minecraft.cpp	/^int minecraft::readVarInt() {$/;"	f	class:minecraft	typeref:typename:int
+request	lib/minecraft.cpp	/^void minecraft::request(){$/;"	f	class:minecraft	typeref:typename:void
+server_port	include/credentials.h	/^int server_port = 25565;$/;"	v	typeref:typename:int
+server_port	include/credentials_edit_me.h	/^int server_port = 25565;$/;"	v	typeref:typename:int
+server_port	lib/minecraft.h	/^    int server_port;$/;"	m	class:minecraft	typeref:typename:int
+server_url	include/credentials_edit_me.h	/^String server_url = "ip";$/;"	v	typeref:typename:String
+server_url	lib/minecraft.h	/^    String server_url;$/;"	m	class:minecraft	typeref:typename:String
+setRotation	lib/minecraft.cpp	/^void minecraft::setRotation(float yaw, float pitch, bool ground){$/;"	f	class:minecraft	typeref:typename:void
+setup	src/main.cpp	/^void setup() {$/;"	f	typeref:typename:void
+ssid	include/credentials.h	/^const char* ssid = "Vodafone-A73648255";$/;"	v	typeref:typename:const char *
+ssid	include/credentials_edit_me.h	/^const char* ssid = "ssid";$/;"	v	typeref:typename:const char *
+teleportConfirm	lib/minecraft.cpp	/^void minecraft::teleportConfirm(int id){$/;"	f	class:minecraft	typeref:typename:void
+teleported	lib/minecraft.h	/^        bool teleported = false;$/;"	m	class:minecraft	typeref:typename:bool
+timeout	lib/minecraft.h	/^        int timeout = 100;$/;"	m	class:minecraft	typeref:typename:int
+update	src/main.cpp	/^void update( void * pvParameters ){$/;"	f	typeref:typename:void
+username	include/credentials_edit_me.h	/^String username = "nickname";$/;"	v	typeref:typename:String
+username	lib/minecraft.h	/^    String username;$/;"	m	class:minecraft	typeref:typename:String
+writeChat	lib/minecraft.cpp	/^void minecraft::writeChat(String text){$/;"	f	class:minecraft	typeref:typename:void
+writeDouble	lib/minecraft.cpp	/^void minecraft::writeDouble(double value){$/;"	f	class:minecraft	typeref:typename:void
+writeFloat	lib/minecraft.cpp	/^void minecraft::writeFloat(float value) {$/;"	f	class:minecraft	typeref:typename:void
+writeLong	lib/minecraft.cpp	/^void minecraft::writeLong(uint64_t num){$/;"	f	class:minecraft	typeref:typename:void
+writeString	lib/minecraft.cpp	/^void minecraft::writeString(String str){$/;"	f	class:minecraft	typeref:typename:void
+writeUnsignedShort	lib/minecraft.cpp	/^void minecraft::writeUnsignedShort(uint16_t num){$/;"	f	class:minecraft	typeref:typename:void
+writeVarInt	lib/minecraft.cpp	/^void minecraft::writeVarInt(int16_t value) {$/;"	f	class:minecraft	typeref:typename:void
+writeVarLong	lib/minecraft.cpp	/^void minecraft::writeVarLong(int64_t value) {$/;"	f	class:minecraft	typeref:typename:void
+writing	lib/minecraft.h	/^        bool writing = 0;$/;"	m	class:minecraft	typeref:typename:bool
+x	lib/minecraft.h	/^        double x = 0;$/;"	m	class:minecraft	typeref:typename:double
+y	lib/minecraft.h	/^        double y = 0;$/;"	m	class:minecraft	typeref:typename:double
+yaw	lib/minecraft.h	/^        float yaw = 0;$/;"	m	class:minecraft	typeref:typename:float
+z	lib/minecraft.h	/^        double z = 0;$/;"	m	class:minecraft	typeref:typename:double
