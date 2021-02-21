@@ -2,41 +2,34 @@
 #include <Arduino.h>
 #include <chunk.h>
 
-// public //
-
-minecraft::minecraft(Stream* __S){
+// INITIALIZE
+minecraft::minecraft(Stream* __S, uint8_t _player_num){
     S = __S;
-    if(!handle_join()){
-        return;
-    }
-    writeJoinGame();
-    writePlayerInfo();
-    writePlayerPositionAndLook(0, 5, 0, 5, 0, 0x00);
-    // writeSpawnPlayer();
-    writeServerDifficulty();
-    writeChunk();
+    player_num = _player_num;
 }
 
-bool minecraft::readHandShake(){
+// SERVERBOUND LOGIN PACKETS
+uint8_t minecraft::readHandShake(){
     readVarInt(); // length
     int id = readVarInt(); // packet id
     int protocol_version = readVarInt();
     readString(); // we don't need our name
     readUnsignedShort();
     int state = readVarInt();
-    Serial.println("[INFO] client state = " + String(state));
+    loginfo("client state = " + String(state));
     if(id != 0){
         return false;
     } else if(protocol_version != 754){
-        Serial.println("[ERROR] wrong protocol version, log in with 1.16.5");
+        logerr("wrong protocol version, log in with 1.16.5");
         return false;
     }
 
-    if(state != 2){
-        Serial.println("[ERROR] wrong state TODO implement status packet");
-        return false;
+    if(state != 1 && state != 2) {
+        logerr("wrong state");
+        return 0;
+    } else {
+        return state;
     }
-    return true;
 }
 
 bool minecraft::readLoginStart(){
@@ -46,16 +39,35 @@ bool minecraft::readLoginStart(){
         return false;
     }
     username = readString();
-    Serial.println("[INFO] player logging in as " + username);
+    loginfo("player logging in as " + username);
     return true;
 }
 
+uint64_t minecraft::readPing(){
+    while(S->available() < 10);
+    readVarInt(); // length
+    readVarInt(); // packet id
+    uint64_t payload = readLong(); // payload
+    loginfo("ping received " + String((uint32_t)payload));
+    return payload;
+}
+
+void minecraft::readRequest(){
+    while(S->available() < 2);
+    readVarInt();
+    readVarInt();
+    loginfo("request packet received");
+}
+
+// SERVERBOUND PLAY PACKETS
+
+// CLIENTBOUND
 void minecraft::writeLoginSuccess(){
     writeVarInt(18 + username.length());
     writeVarInt(0x02);
     writeUUID(1);
     writeString(username);
-    Serial.println("[INFO] login success");
+    loginfo("login success");
 }
 
 void minecraft::writeChunk(){
@@ -84,7 +96,7 @@ void minecraft::writeChunk(){
     writeSubChunk(0);
     
     writeVarInt(0); // no block entities
-    Serial.println("[INFO] chunk sent");
+    loginfo("chunk sent");
     //TOTAL LENGTH 11+638+1026+2775 = 4450
 }
 
@@ -98,7 +110,7 @@ void minecraft::writePlayerPositionAndLook(double x, double y, double z, float y
     writeFloat(pitch);
     writeUnsignedByte(flags);
     writeVarInt(0x55);
-    Serial.println("[INFO] player position and look sent");
+    loginfo("player position and look sent");
 }
 
 void minecraft::writePlayerInfo(){
@@ -112,15 +124,15 @@ void minecraft::writePlayerInfo(){
     writeVarInt(0); // gamemode
     writeVarInt(100); // ping
     writeBoolean(0); // has display name
-    Serial.println("[INFO] player info sent");
+    loginfo("player info sent");
 }
 
 void minecraft::writeKeepAlive(){
     writeVarInt(9); //length
     writeVarInt(0x1F);
-    long num = millis()/1000;
+    uint32_t num = millis()/1000;
     writeLong(num);
-    Serial.println("[INFO] keepalive sent: " + String(num));
+    loginfo("keepalive sent: " + String(num));
 }
 
 void minecraft::writeServerDifficulty(){
@@ -128,7 +140,7 @@ void minecraft::writeServerDifficulty(){
     writeVarInt(0x0D);
     writeUnsignedByte(0);
     writeBoolean(1);
-    Serial.println("[INFO] server difficulty packet sent");
+    loginfo("server difficulty packet sent");
 }
 
 void minecraft::writeSpawnPlayer(){
@@ -141,11 +153,11 @@ void minecraft::writeSpawnPlayer(){
     writeDouble(0); // player z
     writeUnsignedByte(5); // player yaw
     writeUnsignedByte(0); // player pitch
-    Serial.println("[INFO] spawn player packet sent");
+    loginfo("spawn player packet sent");
 }
 
 void minecraft::writeJoinGame(){
-    Serial.println("[INFO] sending join game packet...");
+    loginfo("sending join game packet...");
     writeVarInt(1+4+1+1+1+1+20+1131+268+20+8+1+1+1+1+1+1); // LENGTH
     writeVarInt(0x24);
     writeInt(1); // entity id
@@ -166,7 +178,22 @@ void minecraft::writeJoinGame(){
     writeBoolean(0); // enable respawn screen
     writeBoolean(0); // is debug world
     writeBoolean(1); // is flat
-    Serial.println("[INFO] join game packet sent");
+    loginfo("join game packet sent");
+}
+
+void minecraft::writeResponse(){
+    loginfo("writing response packet...");
+    writeVarInt(506);
+    writeVarInt(0);
+    writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
+    loginfo("response packet sent");
+}
+
+void minecraft::writePong(uint64_t payload){
+    writeVarInt(9); // length
+    writeVarInt(1); // packet id
+    writeLong(payload); // payload
+    loginfo("pong sent");
 }
 
 void minecraft::writeSubChunk(uint8_t index){
@@ -197,7 +224,8 @@ void minecraft::writeSubChunk(uint8_t index){
     writeLong(temp);
 }
 
-int minecraft::readUnsignedShort(){
+// READ TYPES
+uint16_t minecraft::readUnsignedShort(){
     while(S->available() < 2);
     int ret = S->read();
     return (ret << 8) | S->read();
@@ -225,26 +253,26 @@ double minecraft::readDouble(){
     return d;
 }
 
-long minecraft::readLong(){
+int64_t minecraft::readLong(){
     char b[8] = {};
     while(S->available() < 8);
     for(int i=0; i<8; i++){
         b[i] = S->read();
     }
-    long l = ((long) b[0] << 56)
-       | ((long) b[1] & 0xff) << 48
-       | ((long) b[2] & 0xff) << 40
-       | ((long) b[3] & 0xff) << 32
-       | ((long) b[4] & 0xff) << 24
-       | ((long) b[5] & 0xff) << 16
-       | ((long) b[6] & 0xff) << 8
-       | ((long) b[7] & 0xff);
+    uint64_t l = ((uint64_t) b[0] << 56)
+       | ((uint64_t) b[1] & 0xff) << 48
+       | ((uint64_t) b[2] & 0xff) << 40
+       | ((uint64_t) b[3] & 0xff) << 32
+       | ((uint64_t) b[4] & 0xff) << 24
+       | ((uint64_t) b[5] & 0xff) << 16
+       | ((uint64_t) b[6] & 0xff) << 8
+       | ((uint64_t) b[7] & 0xff);
     return l;
 }
 
 String minecraft::readString(){
     int length = readVarInt();
-    Serial.println("[INFO] <- text length to read: " + String(length) + " bytes");
+    loginfo("<- text length to read: " + String(length) + " bytes");
     String result;
     for(int i=0; i<length; i++){
         while (S->available() < 1);
@@ -253,7 +281,7 @@ String minecraft::readString(){
     return result;
 }
 
-int minecraft::readVarInt() {
+int32_t minecraft::readVarInt() {
     int numRead = 0;
     int result = 0;
     byte read;
@@ -264,20 +292,13 @@ int minecraft::readVarInt() {
         result |= (value << (7 * numRead));
         numRead++;
         if (numRead > 5) {
-            Serial.println("[ERROR] VarInt too big");
+            logerr("VarInt too big");
         }
     } while ((read & 0b10000000) != 0);
     return result;
 }
 
-// private //
-int minecraft::VarIntLength(int val) {
-    if(val == 0){
-        return 1;
-    }
-    return (int)floor(log(val) / log(128)) + 1;
-}
-
+// WRITE TYPES
 void minecraft::writeDouble(double value){
     unsigned char * p = reinterpret_cast<unsigned char *>(&value);
     for(int i=7; i>=0; i--){
@@ -372,11 +393,26 @@ void minecraft::writeUUID(int user_id){
     S->write(user_id);
 }
 
-bool minecraft::handle_join(){
-    if(!readHandShake()) return false;
-    if(!readLoginStart()) return false;
-
-    writeLoginSuccess();
+// HANDLERS
+bool minecraft::join(){
+    uint8_t res = readHandShake();
+    if(res == 1){
+        readRequest();
+        delay(1000);
+        writeResponse();
+        uint64_t payload = readPing();
+        writePong(payload);
+        return false;
+    } else if(res == 2){
+        if(!readLoginStart()) return false;
+        writeLoginSuccess();
+    }
+    writeJoinGame();
+    writePlayerInfo();
+    writePlayerPositionAndLook(0, 5, 0, 5, 0, 0x00);
+    // writeSpawnPlayer();
+    writeServerDifficulty();
+    writeChunk();
     return true;
 }
 
@@ -387,11 +423,28 @@ void minecraft::handle(){
     }
 
     if(S->available()){
-        Serial.print(S->read(), HEX);
-        Serial.print(" ");
+        S->read();
+        //Serial.print(S->read(), HEX);
+        //Serial.print(" ");
     }
 }
 
-int32_t lsr(int32_t x, int n){
+// UTILITIES
+void minecraft::loginfo(String msg){
+    Serial.println( "[INFO] p" + String(player_num) + " " + msg);
+}
+
+void minecraft::logerr(String msg){
+    Serial.println( "[ERROR] p" + String(player_num) + " " + msg);
+}
+
+int32_t lsr(int32_t x, uint32_t n){
   return (int32_t)((uint32_t)x >> n);
+}
+
+uint32_t minecraft::VarIntLength(int val) {
+    if(val == 0){
+        return 1;
+    }
+    return (int)floor(log(val) / log(128)) + 1;
 }

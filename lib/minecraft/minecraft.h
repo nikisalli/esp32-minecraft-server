@@ -7,11 +7,9 @@ class minecraft{
     String username;
 
     public:
-        minecraft(Stream* __S);
+        minecraft(Stream* __S, uint8_t _player_num);
 
         Stream* S;
-        bool compression_enabled = 0;
-        int compression_treshold = 0;
         bool writing = 0;
         double x = 0;
         double y = 0;
@@ -21,18 +19,25 @@ class minecraft{
         bool onGround = true;
         bool teleported = false;
         float health = 0;
-        int food = 0;
+        uint8_t food = 0;
         float food_sat = 0;
-        long long prev_keepalive = 0;
-        
+        uint64_t prev_keepalive = 0;
+        uint8_t player_num = 0;
+
         int timeout = 100;
 
-        bool handle_join        ();
+        void loginfo            (String msg);
+        void logerr             (String msg);
+
+        bool join               ();
         void handle             ();
 
-        bool readHandShake      ();
+        uint8_t readHandShake   ();
         bool readLoginStart     ();
+        uint64_t readPing       ();
+        void readRequest        ();
 
+        void writeResponse      ();
         void writeLoginSuccess  ();
         void writeChunk         ();
         void writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags);
@@ -41,14 +46,15 @@ class minecraft{
         void writeServerDifficulty();
         void writeSpawnPlayer   ();
         void writeJoinGame      ();
+        void writePong          (uint64_t payload);
 
         float readFloat         ();
         double readDouble       ();
-        int readVarInt          ();
+        int32_t readVarInt     ();
         String readString       ();
-        long readLong           ();
-        int readUnsignedShort   ();
-        int VarIntLength        (int val);
+        int64_t readLong       ();
+        uint16_t readUnsignedShort();
+        uint32_t VarIntLength   (int val);
 
     private:
         void writeDouble        (double value);
@@ -69,6 +75,6 @@ class minecraft{
         void writeSubChunk      (uint8_t index);
 };
 
-int lsr(int x, int n);
+int32_t lsr(int32_t x, uint32_t n);
 
 #endif
