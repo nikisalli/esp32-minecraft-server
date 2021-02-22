@@ -2,7 +2,6 @@
 #include <WiFi.h>
 #include <config.h>
 #include <minecraft.h>
-#include <esp_task.h>
 
 typedef struct{
     WiFiClient socket;
@@ -26,10 +25,7 @@ void serverHandler(void * parameter){
 void playerHandler(void * parameter){
     clients client = *(clients*)parameter;
 
-    Serial.println("[INFO] started task " + String(client.id) + " pinned to core " + String(xPortGetCoreID()));
-
-    uint32_t currentTime = millis();
-    uint32_t previousTime = currentTime;
+    mc.players[client.id].loginfo("started task " + String(client.id) + " pinned to core " + String(xPortGetCoreID()));
 
     if(!mc.players[client.id].join()){  // try to join, end task if fail
         goto end;
@@ -37,15 +33,15 @@ void playerHandler(void * parameter){
 
     mc.players[client.id].connected = true; // set connected flag so that the server can start handling this player
 
-    while (client.socket.connected() && currentTime - previousTime <= 2000) {  // if client timeouts end task
+    while (client.socket.connected()) {  // if client timeouts end task
     // while (true) {
         mc.players[client.id].handle();
+
         vTaskDelay(pdMS_TO_TICKS(50));
     }
 
-    Serial.println("[INFO] client " + String(client.id) + " disconnected");
-
     end:
+    mc.players[client.id].loginfo("client " + String(client.id) + " disconnected");
     client.socket.stop();
     mc.players[client.id].connected = false;
     vTaskDelete(NULL);
@@ -78,6 +74,7 @@ void setup() {
     xTaskCreatePinnedToCore(serverHandler, "main_task", 50000, NULL, 2, NULL, 1);
 
     server.begin();
+    server.setTimeout(1);
     Serial.println("[INFO] server started");
 }
 
