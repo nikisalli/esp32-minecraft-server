@@ -1,15 +1,9 @@
 #include "minecraft.h"
-#include <Arduino.h>
 #include <chunk.h>
 
-// INITIALIZE
-minecraft::minecraft(Stream* __S, uint8_t _player_num){
-    S = __S;
-    player_num = _player_num;
-}
-
 // SERVERBOUND LOGIN PACKETS
-uint8_t minecraft::readHandShake(){
+
+uint8_t minecraft::player::readHandShake(){
     readVarInt(); // length
     int id = readVarInt(); // packet id
     int protocol_version = readVarInt();
@@ -32,7 +26,7 @@ uint8_t minecraft::readHandShake(){
     }
 }
 
-bool minecraft::readLoginStart(){
+bool minecraft::player::readLoginStart(){
     readVarInt(); // length
     int id = readVarInt();
     if(id != 0){
@@ -43,7 +37,7 @@ bool minecraft::readLoginStart(){
     return true;
 }
 
-uint64_t minecraft::readPing(){
+uint64_t minecraft::player::readPing(){
     while(S->available() < 10);
     readVarInt(); // length
     readVarInt(); // packet id
@@ -52,7 +46,7 @@ uint64_t minecraft::readPing(){
     return payload;
 }
 
-void minecraft::readRequest(){
+void minecraft::player::readRequest(){
     while(S->available() < 2);
     readVarInt();
     readVarInt();
@@ -62,7 +56,7 @@ void minecraft::readRequest(){
 // SERVERBOUND PLAY PACKETS
 
 // CLIENTBOUND
-void minecraft::writeLoginSuccess(){
+void minecraft::player::writeLoginSuccess(){
     writeVarInt(18 + username.length());
     writeVarInt(0x02);
     writeUUID(1);
@@ -70,7 +64,7 @@ void minecraft::writeLoginSuccess(){
     loginfo("login success");
 }
 
-void minecraft::writeChunk(){
+void minecraft::player::writeChunk(){
     writeVarInt(11+322+1026+2+2774+1); // entire packet length 
     // LENGTH 1+4+4+1+1 = 11
     writeVarInt(0x20); 
@@ -100,7 +94,7 @@ void minecraft::writeChunk(){
     //TOTAL LENGTH 11+638+1026+2775 = 4450
 }
 
-void minecraft::writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags){
+void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags){
     writeVarInt(35);
     writeVarInt(0x34);
     writeDouble(x);
@@ -113,7 +107,7 @@ void minecraft::writePlayerPositionAndLook(double x, double y, double z, float y
     loginfo("player position and look sent");
 }
 
-void minecraft::writePlayerInfo(){
+void minecraft::player::writePlayerInfo(){
     writeVarInt(1+1+1+16+1+username.length()+1+1+1+1); //LENGTH 
     writeVarInt(0x32);
     writeVarInt(0); // action add player
@@ -127,7 +121,7 @@ void minecraft::writePlayerInfo(){
     loginfo("player info sent");
 }
 
-void minecraft::writeKeepAlive(){
+void minecraft::player::writeKeepAlive(){
     writeVarInt(9); //length
     writeVarInt(0x1F);
     uint32_t num = millis()/1000;
@@ -135,7 +129,7 @@ void minecraft::writeKeepAlive(){
     loginfo("keepalive sent: " + String(num));
 }
 
-void minecraft::writeServerDifficulty(){
+void minecraft::player::writeServerDifficulty(){
     writeVarInt(3);
     writeVarInt(0x0D);
     writeUnsignedByte(0);
@@ -143,7 +137,7 @@ void minecraft::writeServerDifficulty(){
     loginfo("server difficulty packet sent");
 }
 
-void minecraft::writeSpawnPlayer(){
+void minecraft::player::writeSpawnPlayer(){
     writeVarInt(1+1+16+8+8+8+1+1); // length
     writeVarInt(0x04);
     writeVarInt(1); // player id
@@ -156,7 +150,7 @@ void minecraft::writeSpawnPlayer(){
     loginfo("spawn player packet sent");
 }
 
-void minecraft::writeJoinGame(){
+void minecraft::player::writeJoinGame(){
     loginfo("sending join game packet...");
     writeVarInt(1+4+1+1+1+1+20+1131+268+20+8+1+1+1+1+1+1); // LENGTH
     writeVarInt(0x24);
@@ -181,7 +175,7 @@ void minecraft::writeJoinGame(){
     loginfo("join game packet sent");
 }
 
-void minecraft::writeResponse(){
+void minecraft::player::writeResponse(){
     loginfo("writing response packet...");
     writeVarInt(506);
     writeVarInt(0);
@@ -189,14 +183,14 @@ void minecraft::writeResponse(){
     loginfo("response packet sent");
 }
 
-void minecraft::writePong(uint64_t payload){
+void minecraft::player::writePong(uint64_t payload){
     writeVarInt(9); // length
     writeVarInt(1); // packet id
     writeLong(payload); // payload
     loginfo("pong sent");
 }
 
-void minecraft::writeSubChunk(uint8_t index){
+void minecraft::player::writeSubChunk(uint8_t index){
     writeShort(block_count[index]); // non-air blocks
     writeUnsignedByte(5); // bits per block
     // palette
@@ -225,13 +219,13 @@ void minecraft::writeSubChunk(uint8_t index){
 }
 
 // READ TYPES
-uint16_t minecraft::readUnsignedShort(){
+uint16_t minecraft::player::readUnsignedShort(){
     while(S->available() < 2);
     int ret = S->read();
     return (ret << 8) | S->read();
 }
 
-float minecraft::readFloat(){
+float minecraft::player::readFloat(){
     char b[4] = {};
     while(S->available() < 4);
     for(int i=3; i>=0; i--){
@@ -242,7 +236,7 @@ float minecraft::readFloat(){
     return f;
 }
 
-double minecraft::readDouble(){
+double minecraft::player::readDouble(){
     char b[8] = {};
     while(S->available() < 8);
     for(int i=7; i>=0; i--){
@@ -253,7 +247,7 @@ double minecraft::readDouble(){
     return d;
 }
 
-int64_t minecraft::readLong(){
+int64_t minecraft::player::readLong(){
     char b[8] = {};
     while(S->available() < 8);
     for(int i=0; i<8; i++){
@@ -270,7 +264,7 @@ int64_t minecraft::readLong(){
     return l;
 }
 
-String minecraft::readString(){
+String minecraft::player::readString(){
     int length = readVarInt();
     loginfo("<- text length to read: " + String(length) + " bytes");
     String result;
@@ -281,7 +275,7 @@ String minecraft::readString(){
     return result;
 }
 
-int32_t minecraft::readVarInt() {
+int32_t minecraft::player::readVarInt() {
     int numRead = 0;
     int result = 0;
     byte read;
@@ -299,21 +293,21 @@ int32_t minecraft::readVarInt() {
 }
 
 // WRITE TYPES
-void minecraft::writeDouble(double value){
+void minecraft::player::writeDouble(double value){
     unsigned char * p = reinterpret_cast<unsigned char *>(&value);
     for(int i=7; i>=0; i--){
         S->write(p[i]);
     }
 }
 
-void minecraft::writeFloat(float value) {
+void minecraft::player::writeFloat(float value) {
     unsigned char * p = reinterpret_cast<unsigned char *>(&value);
     for(int i=3; i>=0; i--){
         S->write(p[i]);
     }
 }
 
-void minecraft::writeVarInt(int32_t value) {
+void minecraft::player::writeVarInt(int32_t value) {
     do {
         uint8_t temp = (uint8_t)(value & 0b01111111);
         value = lsr(value,7);
@@ -324,7 +318,7 @@ void minecraft::writeVarInt(int32_t value) {
     } while (value != 0);
 }
 
-void minecraft::writeVarLong(int64_t value) {
+void minecraft::player::writeVarLong(int64_t value) {
     do {
         byte temp = (byte)(value & 0b01111111);
         value = lsr(value,7);
@@ -335,7 +329,7 @@ void minecraft::writeVarLong(int64_t value) {
     } while (value != 0);
 }
 
-void minecraft::writeString(String str){
+void minecraft::player::writeString(String str){
     int length = str.length();
     byte buf[length + 1]; 
     str.getBytes(buf, length + 1);
@@ -345,48 +339,48 @@ void minecraft::writeString(String str){
     }
 }
 
-void minecraft::writeLong(int64_t num){
+void minecraft::player::writeLong(int64_t num){
     for(int i=7; i>=0; i--){
         S->write((uint8_t)((num >> (i*8)) & 0xff));
     }
 }
 
-void minecraft::writeUnsignedLong(uint64_t num){
+void minecraft::player::writeUnsignedLong(uint64_t num){
     for(int i=7; i>=0; i--){
         S->write((uint8_t)((num >> (i*8)) & 0xff));
     }
 }
 
-void minecraft::writeUnsignedShort(uint16_t num){
+void minecraft::player::writeUnsignedShort(uint16_t num){
     S->write((byte)((num >> 8) & 0xff));
     S->write((byte)(num & 0xff));
 }
 
-void minecraft::writeUnsignedByte(uint8_t num){
+void minecraft::player::writeUnsignedByte(uint8_t num){
     S->write(num);
 }
 
-void minecraft::writeInt(int32_t num){
+void minecraft::player::writeInt(int32_t num){
     S->write((byte)((num >> 24) & 0xff));
     S->write((byte)((num >> 16) & 0xff));
     S->write((byte)((num >> 8) & 0xff));
     S->write((byte)(num & 0xff));
 }
 
-void minecraft::writeShort(int16_t num){
+void minecraft::player::writeShort(int16_t num){
     S->write((byte)((num >> 8) & 0xff));
     S->write((byte)(num & 0xff));
 }
 
-void minecraft::writeByte(int8_t num){
+void minecraft::player::writeByte(int8_t num){
     S->write(num);
 }
 
-void minecraft::writeBoolean(uint8_t val){
+void minecraft::player::writeBoolean(uint8_t val){
     S->write(val);
 }
 
-void minecraft::writeUUID(int user_id){
+void minecraft::player::writeUUID(int user_id){
     for(int i = 0; i < 15; i++){
         S->print(0);
     }
@@ -394,7 +388,7 @@ void minecraft::writeUUID(int user_id){
 }
 
 // HANDLERS
-bool minecraft::join(){
+bool minecraft::player::join(){
     uint8_t res = readHandShake();
     if(res == 1){
         readRequest();
@@ -418,9 +412,12 @@ bool minecraft::join(){
 
 void minecraft::handle(){
     if(millis() - prev_keepalive > 5000){
-        writeKeepAlive();
+        // writeKeepAlive();
         prev_keepalive = millis();
     }
+}
+
+void minecraft::player::handle(){
 
     if(S->available()){
         S->read();
@@ -430,19 +427,19 @@ void minecraft::handle(){
 }
 
 // UTILITIES
-void minecraft::loginfo(String msg){
-    Serial.println( "[INFO] p" + String(player_num) + " " + msg);
+void minecraft::player::loginfo(String msg){
+    Serial.println( "[INFO] p" + String(id) + " " + msg);
 }
 
-void minecraft::logerr(String msg){
-    Serial.println( "[ERROR] p" + String(player_num) + " " + msg);
+void minecraft::player::logerr(String msg){
+    Serial.println( "[ERROR] p" + String(id) + " " + msg);
 }
 
 int32_t lsr(int32_t x, uint32_t n){
   return (int32_t)((uint32_t)x >> n);
 }
 
-uint32_t minecraft::VarIntLength(int val) {
+uint32_t minecraft::player::VarIntLength(int val) {
     if(val == 0){
         return 1;
     }

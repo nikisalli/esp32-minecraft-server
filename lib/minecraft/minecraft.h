@@ -4,30 +4,24 @@
 #include <Arduino.h>
 
 class minecraft{
-    String username;
-
     public:
-        minecraft(Stream* __S, uint8_t _player_num);
 
+    class player{
+
+        public:
         Stream* S;
-        bool writing = 0;
-        double x = 0;
-        double y = 0;
-        double z = 0;
-        float yaw = 0;
-        float pitch = 0;
-        bool onGround = true;
-        bool teleported = false;
+
+        bool connected = false;
+        String username;
+        double x;
+        double y;
+        double z;
+        double yaw;
+        double pitch;
         float health = 0;
         uint8_t food = 0;
         float food_sat = 0;
-        uint64_t prev_keepalive = 0;
-        uint8_t player_num = 0;
-
-        int timeout = 100;
-
-        void loginfo            (String msg);
-        void logerr             (String msg);
+        uint8_t id = 0;
 
         bool join               ();
         void handle             ();
@@ -47,16 +41,19 @@ class minecraft{
         void writeSpawnPlayer   ();
         void writeJoinGame      ();
         void writePong          (uint64_t payload);
+        void writeSubChunk      (uint8_t index);
+
+        void loginfo            (String msg);
+        void logerr             (String msg);
 
         float readFloat         ();
         double readDouble       ();
-        int32_t readVarInt     ();
+        int32_t readVarInt      ();
         String readString       ();
-        int64_t readLong       ();
+        int64_t readLong        ();
         uint16_t readUnsignedShort();
         uint32_t VarIntLength   (int val);
 
-    private:
         void writeDouble        (double value);
         void writeFloat         (float value);
         void writeVarInt        (int32_t value);
@@ -71,8 +68,13 @@ class minecraft{
         void writeByte          (int8_t num);
         void writeBoolean       (uint8_t val);
         void writeUUID          (int user_id);
+    };
 
-        void writeSubChunk      (uint8_t index);
+    uint64_t tick = 0;
+    uint64_t prev_keepalive = 0;
+
+    void handle();
+    player players[5];
 };
 
 int32_t lsr(int32_t x, uint32_t n);
