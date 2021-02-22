@@ -16,21 +16,38 @@ minecraft mc;
 
 int timeoutTime = 2000;
 
-void playerHandler( void * parameter ){
+void serverHandler(void * parameter){
+    while(1){
+        mc.handle();
+        vTaskDelay(pdMS_TO_TICKS(100));
+    }
+}
+
+void playerHandler(void * parameter){
     clients client = *(clients*)parameter;
-    Serial.println("[INFO] started task " + String(client.id));
+
+    Serial.println("[INFO] started task " + String(client.id) + " pinned to core " + String(xPortGetCoreID()));
+
     uint32_t currentTime = millis();
     uint32_t previousTime = currentTime;
 
-    if(!mc.players[client.id].join()){
-        client.socket.stop();
-        vTaskDelete(NULL);
+    if(!mc.players[client.id].join()){  // try to join, end task if fail
+        goto end;
     }
-    while (client.socket.connected() && currentTime - previousTime <= 2000) {
+
+    mc.players[client.id].connected = true; // set connected flag so that the server can start handling this player
+
+    while (client.socket.connected() && currentTime - previousTime <= 2000) {  // if client timeouts end task
     // while (true) {
         mc.players[client.id].handle();
+        vTaskDelay(pdMS_TO_TICKS(50));
     }
+
     Serial.println("[INFO] client " + String(client.id) + " disconnected");
+
+    end:
+    client.socket.stop();
+    mc.players[client.id].connected = false;
     vTaskDelete(NULL);
 }
 
@@ -58,6 +75,8 @@ void setup() {
 
     }
 
+    xTaskCreatePinnedToCore(serverHandler, "main_task", 50000, NULL, 2, NULL, 1);
+
     server.begin();
     Serial.println("[INFO] server started");
 }
@@ -67,7 +86,7 @@ void loop(){
     //check if there are any new clients
     if (server.hasClient()){
         for(i = 0; i < MAX_PLAYERS; i++){
-        //find free/disconnected spot
+            //find free/disconnected spot
             if (!serverClients[i].socket || !serverClients[i].socket.connected()){
                 if(serverClients[i].socket) serverClients[i].socket.stop();
                 serverClients[i].socket = server.available();
@@ -75,7 +94,7 @@ void loop(){
                 char name[20];
                 snprintf(name, 20, "playerHandler%d", i);
                 xTaskCreatePinnedToCore(playerHandler, name, 50000, (void*)&serverClients[i], 2, NULL, i % 2);
-                return;
+                return;  // restart loop
             }
         }
         //no free/disconnected spot so reject

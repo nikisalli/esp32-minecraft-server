@@ -1,5 +1,6 @@
 #include "minecraft.h"
 #include <chunk.h>
+#include <mutex>
 
 // SERVERBOUND LOGIN PACKETS
 
@@ -412,7 +413,11 @@ bool minecraft::player::join(){
 
 void minecraft::handle(){
     if(millis() - prev_keepalive > 5000){
-        // writeKeepAlive();
+        for(auto player : players){
+            if(player.connected){
+                player.writeKeepAlive();
+            }
+        }
         prev_keepalive = millis();
     }
 }
