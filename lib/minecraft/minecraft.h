@@ -2,15 +2,15 @@
 #define MINECRAFT_H
 
 #include <Arduino.h>
+#include <mutex>
 
 class minecraft{
     public:
-
     class player{
-
         public:
+        std::mutex * mtx;
         Stream* S;
-
+        minecraft* mc;
         bool connected = false;
         String username;
         double x;
@@ -18,10 +18,15 @@ class minecraft{
         double z;
         double yaw;
         double pitch;
+        bool on_ground = true;
         float health = 0;
         uint8_t food = 0;
         float food_sat = 0;
         uint8_t id = 0;
+
+        player(){  // since mutex is neither moveable or copyable we make a new instance in the constructor
+            mtx = new std::mutex();
+        }
 
         bool join               ();
         void handle             ();
@@ -31,17 +36,21 @@ class minecraft{
         uint64_t readPing       ();
         void readRequest        ();
 
+        void readChat           ();
+        void readPosition       ();
+
         void writeResponse      ();
         void writeLoginSuccess  ();
         void writeChunk         ();
         void writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags);
-        void writePlayerInfo    ();
         void writeKeepAlive     ();
         void writeServerDifficulty();
-        void writeSpawnPlayer   ();
+        void writeSpawnPlayer   (double x, double y, double z, int yaw, int pitch, uint8_t id);
         void writeJoinGame      ();
         void writePong          (uint64_t payload);
         void writeSubChunk      (uint8_t index);
+        void writeChat          (String msg, String username);
+        void writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id);
 
         void loginfo            (String msg);
         void logerr             (String msg);
@@ -53,6 +62,8 @@ class minecraft{
         int64_t readLong        ();
         uint16_t readUnsignedShort();
         uint32_t VarIntLength   (int val);
+        uint8_t readByte        ();
+        bool readBool           ();
 
         void writeDouble        (double value);
         void writeFloat         (float value);
@@ -72,9 +83,14 @@ class minecraft{
 
     uint64_t tick = 0;
     uint64_t prev_keepalive = 0;
-
-    void handle();
     player players[5];
+
+    void handle                      ();
+    void broadcastChatMessage        (String msg, String username);
+    void broadcastSpawnPlayer        ();
+    void broadcastPlayerPosAndLook   (double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id);
+    void broadcastPlayerInfo         ();
+    uint8_t getPlayerNum                ();
 };
 
 int32_t lsr(int32_t x, uint32_t n);

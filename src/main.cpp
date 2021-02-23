@@ -18,7 +18,7 @@ int timeoutTime = 2000;
 void serverHandler(void * parameter){
     while(1){
         mc.handle();
-        vTaskDelay(pdMS_TO_TICKS(100));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 }
 
@@ -31,13 +31,10 @@ void playerHandler(void * parameter){
         goto end;
     }
 
-    mc.players[client.id].connected = true; // set connected flag so that the server can start handling this player
-
     while (client.socket.connected()) {  // if client timeouts end task
     // while (true) {
         mc.players[client.id].handle();
-
-        vTaskDelay(pdMS_TO_TICKS(50));
+        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     end:
@@ -68,7 +65,7 @@ void setup() {
         mc.players[i].S = &serverClients[i].socket;
         mc.players[i].id = i;
         serverClients[i].id = i;
-
+        mc.players[i].mc = &mc;
     }
 
     xTaskCreatePinnedToCore(serverHandler, "main_task", 50000, NULL, 2, NULL, 1);
@@ -90,7 +87,7 @@ void loop(){
                 Serial.print("[INFO] New client connected: "); Serial.println(i);
                 char name[20];
                 snprintf(name, 20, "playerHandler%d", i);
-                xTaskCreatePinnedToCore(playerHandler, name, 50000, (void*)&serverClients[i], 2, NULL, i % 2);
+                xTaskCreatePinnedToCore(playerHandler, name, 50000, (void*)&serverClients[i], 2, NULL, 0);
                 return;  // restart loop
             }
         }

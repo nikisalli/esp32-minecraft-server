@@ -1,9 +1,10 @@
 #include "minecraft.h"
 #include <chunk.h>
-#include <mutex>
 
-// SERVERBOUND LOGIN PACKETS
+// TODO non-retarded way of buffering and auto calculating data length
+// forgive the shitty way I write data. I'll fix that if the project keeps going
 
+// SERVERBOUND LOGIN
 uint8_t minecraft::player::readHandShake(){
     readVarInt(); // length
     int id = readVarInt(); // packet id
@@ -55,17 +56,117 @@ void minecraft::player::readRequest(){
 }
 
 // SERVERBOUND PLAY PACKETS
+void minecraft::player::readChat(){
+    String m = readString();
+    loginfo("<" + username + "> " + m);
+    mc->broadcastChatMessage(m, username);
+}
 
-// CLIENTBOUND
+void minecraft::player::readPosition(){
+    x = readDouble();
+    y = readDouble();
+    z = readDouble();
+    on_ground = readBool();
+    mc->broadcastPlayerPosAndLook(x, y, z, yaw, pitch, on_ground, id);
+    // loginfo("player pos " + String(x) + " " + String(y) + " " + String(z));
+}
+
+// CLIENTBOUND BROADCAST
+void minecraft::broadcastChatMessage(String msg, String username){
+    for(auto player : players){
+        if(player.connected){
+            player.loginfo("broadcasting message");
+            player.writeChat(msg, username);
+        }
+    }
+}
+
+void minecraft::broadcastSpawnPlayer(){
+    for(auto player : players){
+        if(player.connected){
+            for(auto p : players){
+                if(p.id != player.id && p.connected){
+                    player.writeSpawnPlayer(p.x, p.y, p.z, p.yaw, p.pitch, p.id);
+                    player.loginfo("spawn player packet sent for p" + String(p.id));
+                }
+            }
+        }
+    }
+}
+
+void minecraft::broadcastPlayerPosAndLook(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
+    for(auto player : players){
+        if(player.connected && player.id != id){
+            player.writeEntityTeleport(x, y, z, yaw, pitch, on_ground, id);
+        }
+    }
+}
+
+void minecraft::broadcastPlayerInfo(){
+    // calculate data length in a horrible non-automated way for now TODO
+    uint32_t num = getPlayerNum();
+    uint32_t len = 3 + (21 * num);
+    for(auto player : players){
+        if(player.connected){
+            len += player.username.length();
+        }
+    }
+    // broadcast playerinfo
+    for(auto player : players){
+        if(player.connected){
+            (*(player.mtx)).lock();
+            player.writeVarInt(len); //LENGTH 
+            player.writeVarInt(0x32);
+            player.writeVarInt(0); // action add player
+            player.writeVarInt(num); // number of players
+            for(auto p : players){
+                if(p.connected){
+                    player.writeUUID(p.id); // first player's uuid
+                    player.writeString(p.username);
+                    player.writeVarInt(0); // no properties given
+                    player.writeVarInt(0); // gamemode
+                    player.writeVarInt(100); // hardcoded ping TODO
+                    player.writeBoolean(0); // has display name
+                }
+            }
+            player.loginfo("player info sent");
+            (*(player.mtx)).unlock();
+        }
+    }
+}
+
+uint8_t minecraft::getPlayerNum(){
+    uint8_t i = 0;
+    for(auto player : players){
+        if(player.connected) i++;
+    }
+    return i;
+}
+
+// CLIENTBOUND PLAYER
+void minecraft::player::writeChat(String msg, String username){
+    (*mtx).lock();
+    String s = "{\"text\": \"<" + username + "> " + msg + "\",\"bold\": \"false\"}";
+    writeVarInt(19 + s.length());
+    writeVarInt(0x0E);
+    writeString(s);
+    writeByte(0);
+    writeUUID(id);
+    (*mtx).unlock();
+}
+
 void minecraft::player::writeLoginSuccess(){
+    (*mtx).lock();
     writeVarInt(18 + username.length());
     writeVarInt(0x02);
-    writeUUID(1);
+    writeUUID(id);
     writeString(username);
     loginfo("login success");
+    (*mtx).unlock();
 }
 
 void minecraft::player::writeChunk(){
+    (*mtx).lock();
     writeVarInt(11+322+1026+2+2774+1); // entire packet length 
     // LENGTH 1+4+4+1+1 = 11
     writeVarInt(0x20); 
@@ -93,9 +194,11 @@ void minecraft::player::writeChunk(){
     writeVarInt(0); // no block entities
     loginfo("chunk sent");
     //TOTAL LENGTH 11+638+1026+2775 = 4450
+    (*mtx).unlock();
 }
 
 void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags){
+    (*mtx).lock();
     writeVarInt(35);
     writeVarInt(0x34);
     writeDouble(x);
@@ -106,56 +209,49 @@ void minecraft::player::writePlayerPositionAndLook(double x, double y, double z,
     writeUnsignedByte(flags);
     writeVarInt(0x55);
     loginfo("player position and look sent");
-}
-
-void minecraft::player::writePlayerInfo(){
-    writeVarInt(1+1+1+16+1+username.length()+1+1+1+1); //LENGTH 
-    writeVarInt(0x32);
-    writeVarInt(0); // action add player
-    writeVarInt(1); // number of players
-    writeUUID(1); // first player's uuid
-    writeString(username);
-    writeVarInt(0); // no properties given
-    writeVarInt(0); // gamemode
-    writeVarInt(100); // ping
-    writeBoolean(0); // has display name
-    loginfo("player info sent");
+    (*mtx).unlock();
 }
 
 void minecraft::player::writeKeepAlive(){
+    (*mtx).lock();
     writeVarInt(9); //length
     writeVarInt(0x1F);
     uint32_t num = millis()/1000;
     writeLong(num);
     loginfo("keepalive sent: " + String(num));
+    (*mtx).unlock();
 }
 
 void minecraft::player::writeServerDifficulty(){
+    (*mtx).lock();
     writeVarInt(3);
     writeVarInt(0x0D);
     writeUnsignedByte(0);
     writeBoolean(1);
     loginfo("server difficulty packet sent");
+    (*mtx).unlock();
 }
 
-void minecraft::player::writeSpawnPlayer(){
-    writeVarInt(1+1+16+8+8+8+1+1); // length
+void minecraft::player::writeSpawnPlayer(double x, double y, double z, int yaw, int pitch, uint8_t id){
+    (*mtx).lock();
+    writeVarInt(44); // length
     writeVarInt(0x04);
-    writeVarInt(1); // player id
-    writeUUID(1); // player uuid
-    writeDouble(0); // player x
-    writeDouble(5); // player y
-    writeDouble(0); // player z
-    writeUnsignedByte(5); // player yaw
-    writeUnsignedByte(0); // player pitch
-    loginfo("spawn player packet sent");
+    writeVarInt(id); // player id
+    writeUUID(id); // player uuid
+    writeDouble(x); // player x
+    writeDouble(y); // player y
+    writeDouble(z); // player z
+    writeUnsignedByte(yaw); // player yaw
+    writeUnsignedByte(pitch); // player pitch
+    (*mtx).unlock();
 }
 
 void minecraft::player::writeJoinGame(){
+    (*mtx).lock();
     loginfo("sending join game packet...");
-    writeVarInt(1+4+1+1+1+1+20+1131+268+20+8+1+1+1+1+1+1); // LENGTH
+    writeVarInt(1462); // LENGTH
     writeVarInt(0x24);
-    writeInt(1); // entity id
+    writeInt(id); // entity id
     writeBoolean(0); // is hardcore
     writeUnsignedByte(0); // gamemode
     writeByte(-1); // previous gamemode
@@ -174,21 +270,26 @@ void minecraft::player::writeJoinGame(){
     writeBoolean(0); // is debug world
     writeBoolean(1); // is flat
     loginfo("join game packet sent");
+    (*mtx).unlock();
 }
 
 void minecraft::player::writeResponse(){
+    (*mtx).lock();
     loginfo("writing response packet...");
     writeVarInt(506);
     writeVarInt(0);
     writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
     loginfo("response packet sent");
+    (*mtx).unlock();
 }
 
 void minecraft::player::writePong(uint64_t payload){
+    (*mtx).lock();
     writeVarInt(9); // length
     writeVarInt(1); // packet id
     writeLong(payload); // payload
     loginfo("pong sent");
+    (*mtx).unlock();
 }
 
 void minecraft::player::writeSubChunk(uint8_t index){
@@ -217,6 +318,20 @@ void minecraft::player::writeSubChunk(uint8_t index){
         }
     }
     writeLong(temp);
+}
+
+void minecraft::player::writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
+    (*mtx).lock();
+    writeVarInt(29); // length
+    writeVarInt(0x56); // packet id
+    writeVarInt(id);
+    writeDouble(x);
+    writeDouble(y);
+    writeDouble(z);
+    writeByte(yaw);
+    writeByte(pitch);
+    writeBoolean(on_ground);
+    (*mtx).unlock();
 }
 
 // READ TYPES
@@ -291,6 +406,14 @@ int32_t minecraft::player::readVarInt() {
         }
     } while ((read & 0b10000000) != 0);
     return result;
+}
+
+uint8_t minecraft::player::readByte(){
+    return S->read();
+}
+
+bool minecraft::player::readBool(){
+    return S->read();
 }
 
 // WRITE TYPES
@@ -402,12 +525,14 @@ bool minecraft::player::join(){
         if(!readLoginStart()) return false;
         writeLoginSuccess();
     }
+    connected = true;
     writeJoinGame();
-    writePlayerInfo();
     writePlayerPositionAndLook(0, 5, 0, 5, 0, 0x00);
-    // writeSpawnPlayer();
     writeServerDifficulty();
     writeChunk();
+    mc->broadcastPlayerInfo();
+    mc->broadcastChatMessage("joined the server", username);
+    mc->broadcastSpawnPlayer();
     return true;
 }
 
@@ -424,10 +549,26 @@ void minecraft::handle(){
 
 void minecraft::player::handle(){
 
-    if(S->available()){
-        S->read();
+    if(S->available() > 2){
+        uint32_t length = S->read();
+        uint32_t packetid = S->read();
         //Serial.print(S->read(), HEX);
         //Serial.print(" ");
+        switch (packetid){
+        case 0x03:
+            readChat();
+            break;
+        case 0x12:
+            readPosition();
+            break;
+        default:
+            for(int i=0; i < length - VarIntLength(packetid); i++ ){
+                while (S->available() < 1);
+                // loginfo("packet id " + String(packetid));
+                S->read();
+            }
+            break;
+        }
     }
 }
 
