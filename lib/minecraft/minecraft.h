@@ -3,6 +3,7 @@
 
 #include <Arduino.h>
 #include <mutex>
+#include <array>
 
 class minecraft{
     public:

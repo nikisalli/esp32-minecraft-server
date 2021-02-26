@@ -18,7 +18,7 @@ int timeoutTime = 2000;
 void serverHandler(void * parameter){
     while(1){
         mc.handle();
-        vTaskDelay(pdMS_TO_TICKS(10));
+        vTaskDelay(pdMS_TO_TICKS(5000));
     }
 }
 
@@ -68,7 +68,7 @@ void setup() {
         mc.players[i].mc = &mc;
     }
 
-    xTaskCreatePinnedToCore(serverHandler, "main_task", 50000, NULL, 2, NULL, 1);
+    xTaskCreatePinnedToCore(serverHandler, "main_task", 10000, NULL, 2, NULL, 1);
 
     server.begin();
     server.setTimeout(1);
@@ -87,7 +87,7 @@ void loop(){
                 Serial.print("[INFO] New client connected: "); Serial.println(i);
                 char name[20];
                 snprintf(name, 20, "playerHandler%d", i);
-                xTaskCreatePinnedToCore(playerHandler, name, 50000, (void*)&serverClients[i], 2, NULL, 0);
+                xTaskCreatePinnedToCore(playerHandler, name, 10000, (void*)&serverClients[i], 2, NULL, i % 2);
                 return;  // restart loop
             }
         }

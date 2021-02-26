@@ -1,8 +1,7 @@
 #include "minecraft.h"
 #include <chunk.h>
 
-// TODO non-retarded way of buffering and auto calculating data length
-// forgive the shitty way I write data. I'll fix that if the project keeps going
+// TODO packet serialization abstraction
 
 // SERVERBOUND LOGIN
 uint8_t minecraft::player::readHandShake(){
@@ -167,33 +166,28 @@ void minecraft::player::writeLoginSuccess(){
 
 void minecraft::player::writeChunk(){
     (*mtx).lock();
-    writeVarInt(11+322+1026+2+2774+1); // entire packet length 
-    // LENGTH 1+4+4+1+1 = 11
+    writeVarInt(5849); // entire packet length 
     writeVarInt(0x20); 
     writeInt(0); // X
     writeInt(0); // Z
     writeBoolean(1); // full chunk yes
     writeVarInt(0x01); //bitmask set to 0xFF because we're sending the whole chunk
 
-    // NBT heightmap LENGTH 322
-    for(auto i : height_map_NBT)
-        S->write(i);
+    S->write(height_map_NBT, sizeof(height_map_NBT) / sizeof(height_map_NBT[0]));
 
-    // biomes LENGTH 2+1024=1026
+    uint8_t b[1024];
+    memset(b, 127, 1024);
     writeVarInt(1024); // array length 2 bytes as varint
-    for(int i = 0; i < 1024; i++)
-        writeVarInt(127); // 127 = void biome
-
-    // first subchunk has one byte more because of block count varint being two bytes long
-    // chunk data LENGTH 2+1+1+33+2+(8*342) = 2775
-    writeVarInt(2774);
+    S->write(b, 1024); // 127 = void biome
+    
+    //1362
+    writeVarInt(4487); // first subchunk has one byte more because of block count varint being two bytes long
 
     Serial.println("writing subchunk: " + String(0));
     writeSubChunk(0);
-    
+
     writeVarInt(0); // no block entities
     loginfo("chunk sent");
-    //TOTAL LENGTH 11+638+1026+2775 = 4450
     (*mtx).unlock();
 }
 
@@ -257,10 +251,8 @@ void minecraft::player::writeJoinGame(){
     writeByte(-1); // previous gamemode
     writeVarInt(1); // only one world
     writeString("minecraft:overworld"); // only one world
-    for(auto i : dimension_codec_NBT) // NBT with world settings
-        S->write(i);
-    for(auto i : dimension_NBT) // NBT with valid dimensions
-        S->write(i);
+    S->write(dimension_codec_NBT, sizeof(dimension_codec_NBT) / sizeof(dimension_codec_NBT[0])); // NBT with world settings
+    S->write(dimension_NBT, sizeof(dimension_NBT) / sizeof(dimension_NBT[0])); // NBT with world settings
     writeString("minecraft:overworld"); // spawn world
     writeLong(0); // hashed seed
     writeVarInt(10); // max players
@@ -294,30 +286,12 @@ void minecraft::player::writePong(uint64_t payload){
 
 void minecraft::player::writeSubChunk(uint8_t index){
     writeShort(block_count[index]); // non-air blocks
-    writeUnsignedByte(5); // bits per block
-    // palette
-    writeVarInt(32); // in 5bits we can reference 32 different blocks
-    for(auto i : blocks) // write the palette
-        writeVarInt(i);
-    // data
-    writeVarInt(342); // we're sending 342 longs (16x16x16)/12 (one 64 bit long fits 12 5 bit blocks)
-
-    uint64_t temp = 0;
-    uint8_t count = 0;
-    for(uint8_t i = 16 * index; i < (16 * index + 16); i++){
-        for(uint8_t j = 0; j < 16; j++){
-            for(uint8_t k = 0; k < 16; k++){
-                temp |= ((uint64_t) blocks[chunk[i][j][k]] & 0x1F) << count * 5;
-                count ++;
-                if(count >= 12){
-                    writeUnsignedLong(temp);
-                    temp = 0;
-                    count = 0;
-                }
-            }
-        }
-    }
-    writeLong(temp);
+    writeUnsignedByte(8); // bits per block
+    writeVarInt(256); // palette length 8 bits per block
+    S->write(palette, 384); // write palette
+    writeVarInt(512); // we're sending 512 longs or 4096 bytes
+    char * buf = (char*)chunk;
+    S->write(buf, 4096);
 }
 
 void minecraft::player::writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
@@ -458,9 +432,10 @@ void minecraft::player::writeString(String str){
     byte buf[length + 1]; 
     str.getBytes(buf, length + 1);
     writeVarInt(length);
-    for(int i=0; i<length; i++){
+    S->write(buf, length);
+    /*for(int i=0; i<length; i++){
         S->write(buf[i]);
-    }
+    }*/
 }
 
 void minecraft::player::writeLong(int64_t num){
@@ -537,18 +512,14 @@ bool minecraft::player::join(){
 }
 
 void minecraft::handle(){
-    if(millis() - prev_keepalive > 5000){
-        for(auto player : players){
-            if(player.connected){
-                player.writeKeepAlive();
-            }
+    for(auto player : players){
+        if(player.connected){
+            player.writeKeepAlive();
         }
-        prev_keepalive = millis();
     }
 }
 
 void minecraft::player::handle(){
-
     if(S->available() > 2){
         uint32_t length = S->read();
         uint32_t packetid = S->read();
