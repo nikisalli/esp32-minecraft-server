@@ -66,7 +66,11 @@ void minecraft::player::readRequest(){
 void minecraft::player::readChat(){
     String m = readString();
     login("<" + username + "> " + m);
-    mc->broadcastChatMessage(m, username);
+    if(m == "/stats"){
+        writeChat("freeheap: " + String(esp_get_free_heap_size() / 1000) + "kB", "server");
+    } else {
+        mc->broadcastChatMessage(m, username);
+    }
 }
 
 void minecraft::player::readPosition(){
@@ -110,6 +114,10 @@ void minecraft::player::readTeleportConfirm(){
     login("teleport confirm");
 }
 
+void minecraft::player::readAnimation(){
+    mc->broadcastEntityAnimation(readVarInt(), id);  
+}
+
 // CLIENTBOUND BROADCAST
 void minecraft::broadcastChatMessage(String msg, String username){
     for(auto player : players){
@@ -146,6 +154,14 @@ void minecraft::broadcastPlayerRotation(int _yaw_i, int _pitch_i, bool on_ground
         if(player.connected && player.id != id){
             player.writeEntityRotation(_yaw_i, _pitch_i, on_ground, id);
             player.writeEntityLook(_yaw_i, id);
+        }
+    }
+}
+
+void minecraft::broadcastEntityAnimation(uint8_t anim, uint8_t id){
+    for(auto player : players){
+        if(player.connected && player.id != id){
+            player.writeEntityAnimation(anim, id);
         }
     }
 }
@@ -399,6 +415,24 @@ void minecraft::player::writeEntityLook(int _yaw_i, uint8_t id){
     (*mtx).unlock();
 }
 
+void minecraft::player::writeEntityAnimation(uint8_t anim, uint8_t id){
+    packet p;
+    (*mtx).lock();
+    p.writeVarInt(0x05); // packet id
+    p.writeVarInt(id);
+    switch(anim){
+        case 0:
+            p.writeByte(0);
+            break;
+        case 1:
+            p.writeByte(3);
+            break;
+    }
+    writeLength(p.index);
+    S->write(p.buffer, p.index);
+    (*mtx).unlock();
+}
+
 // READ TYPES
 uint16_t minecraft::player::readUnsignedShort(){
     while(S->available() < 2);
@@ -641,6 +675,9 @@ void minecraft::player::handle(){
             break;
         case 0x00:
             readTeleportConfirm();
+            break;
+        case 0x2C:
+            readAnimation();
             break;
         default:
             loginfo("id: 0x" + String(packetid, HEX) + " length: " + String(length));
