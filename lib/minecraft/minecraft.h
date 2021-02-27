@@ -38,13 +38,13 @@ class minecraft{
         minecraft* mc;
         bool connected = false;
         String username;
-        double x;
-        double y;
-        double z;
-        double yaw;
-        double pitch;
-        int yaw_i;
-        int pitch_i;
+        double x = 0;
+        double y = 5;
+        double z = 0;
+        double yaw = 0;
+        double pitch = 0;
+        int yaw_i = 0;
+        int pitch_i = 0;
         bool on_ground = true;
         float health = 0;
         uint8_t food = 0;
@@ -68,6 +68,7 @@ class minecraft{
         void readRotation       ();
         void readKeepAlive      ();
         void readPositionAndLook();
+        void readTeleportConfirm();
 
         void writeResponse      ();
         void writeLoginSuccess  ();
@@ -82,6 +83,7 @@ class minecraft{
         void writeChat          (String msg, String username);
         void writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id);
         void writeEntityRotation(int yaw, int pitch, bool on_ground, uint8_t id);
+        void writeEntityLook    (int yaw, uint8_t id);
 
         void loginfo            (String msg);
         void logerr             (String msg);

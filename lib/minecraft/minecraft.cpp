@@ -74,7 +74,7 @@ void minecraft::player::readPosition(){
     y = readDouble();
     z = readDouble();
     on_ground = readBool();
-    mc->broadcastPlayerPosAndLook(x, y, z, yaw, pitch, on_ground, id);
+    mc->broadcastPlayerPosAndLook(x, y, z, yaw_i, pitch_i, on_ground, id);
     // login("player pos " + String(x) + " " + String(y) + " " + String(z));
 }
 
@@ -105,6 +105,11 @@ void minecraft::player::readPositionAndLook(){
     // login("player rotation " + String(yaw) + " " + String(pitch));
 }
 
+void minecraft::player::readTeleportConfirm(){
+    readVarInt();
+    login("teleport confirm");
+}
+
 // CLIENTBOUND BROADCAST
 void minecraft::broadcastChatMessage(String msg, String username){
     for(auto player : players){
@@ -119,25 +124,28 @@ void minecraft::broadcastSpawnPlayer(){
         if(player.connected){
             for(auto p : players){
                 if(p.id != player.id && p.connected){
-                    player.writeSpawnPlayer(p.x, p.y, p.z, p.yaw, p.pitch, p.id);
+                    player.writeSpawnPlayer(p.x, p.y, p.z, p.yaw_i, p.pitch_i, p.id);
+                    player.writeEntityLook(p.yaw_i, p.id);
                 }
             }
         }
     }
 }
 
-void minecraft::broadcastPlayerPosAndLook(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
+void minecraft::broadcastPlayerPosAndLook(double x, double y, double z, int _yaw_i, int _pitch_i, bool on_ground, uint8_t id){
     for(auto player : players){
         if(player.connected && player.id != id){
-            player.writeEntityTeleport(x, y, z, yaw, pitch, on_ground, id);
+            player.writeEntityTeleport(x, y, z, _yaw_i, _pitch_i, on_ground, id);
+            player.writeEntityLook(_yaw_i, id);
         }
     }
 }
 
-void minecraft::broadcastPlayerRotation(int yaw_i, int pitch_i, bool on_ground, uint8_t id){
+void minecraft::broadcastPlayerRotation(int _yaw_i, int _pitch_i, bool on_ground, uint8_t id){
     for(auto player : players){
         if(player.connected && player.id != id){
-            player.writeEntityRotation(yaw_i, pitch_i, on_ground, id);
+            player.writeEntityRotation(_yaw_i, _pitch_i, on_ground, id);
+            player.writeEntityLook(_yaw_i, id);
         }
     }
 }
@@ -156,7 +164,6 @@ void minecraft::broadcastPlayerInfo(){
         if(player.connected){
             packet pac;
             (*(player.mtx)).lock();
-            pac.writeVarInt(len); //LENGTH 
             pac.writeVarInt(0x32);
             pac.writeVarInt(0); // action add player
             pac.writeVarInt(num); // number of players
@@ -170,6 +177,8 @@ void minecraft::broadcastPlayerInfo(){
                     pac.writeBoolean(0); // has display name
                 }
             }
+            player.writeLength(pac.index);
+            player.S->write(pac.buffer, pac.index);
             player.login("player info sent");
             (*(player.mtx)).unlock();
         }
@@ -244,15 +253,15 @@ void minecraft::player::writeChunk(){
     (*mtx).unlock();
 }
 
-void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags){
+void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float _yaw, float _pitch, uint8_t flags){
     packet p;
     (*mtx).lock();
     p.writeVarInt(0x34);
     p.writeDouble(x);
     p.writeDouble(y);
     p.writeDouble(z);
-    p.writeFloat(yaw);
-    p.writeFloat(pitch);
+    p.writeFloat(_yaw);
+    p.writeFloat(_pitch);
     p.writeUnsignedByte(flags);
     p.writeVarInt(0x55);
     writeLength(p.index);
@@ -285,7 +294,7 @@ void minecraft::player::writeServerDifficulty(){
     (*mtx).unlock();
 }
 
-void minecraft::player::writeSpawnPlayer(double x, double y, double z, int yaw, int pitch, uint8_t id){
+void minecraft::player::writeSpawnPlayer(double x, double y, double z, int _yaw_i, int _pitch_i, uint8_t id){
     packet p;
     (*mtx).lock();
     p.writeVarInt(0x04);
@@ -294,11 +303,11 @@ void minecraft::player::writeSpawnPlayer(double x, double y, double z, int yaw, 
     p.writeDouble(x); // player x
     p.writeDouble(y); // player y
     p.writeDouble(z); // player z
-    p.writeUnsignedByte(yaw); // player yaw
-    p.writeUnsignedByte(pitch); // player pitch
+    p.writeUnsignedByte(_yaw_i); // player yaw
+    p.writeUnsignedByte(_pitch_i); // player pitch
     writeLength(p.index);
     S->write(p.buffer, p.index);
-    logout("spawn player sent");
+    logout("spawn player sent id:" + String(id));
     (*mtx).unlock();
 }
 
@@ -350,7 +359,7 @@ void minecraft::player::writePong(uint64_t payload){
     (*mtx).unlock();
 }
 
-void minecraft::player::writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
+void minecraft::player::writeEntityTeleport(double x, double y, double z, int _yaw_i, int _pitch_i, bool on_ground, uint8_t id){
     packet p;
     (*mtx).lock();
     p.writeVarInt(0x56); // packet id
@@ -358,22 +367,33 @@ void minecraft::player::writeEntityTeleport(double x, double y, double z, int ya
     p.writeDouble(x);
     p.writeDouble(y);
     p.writeDouble(z);
-    p.writeByte(yaw_i);
-    p.writeByte(pitch_i);
+    p.writeByte(_yaw_i);
+    p.writeByte(_pitch_i);
     p.writeBoolean(on_ground);
     writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
-void minecraft::player::writeEntityRotation(int yaw, int pitch, bool on_ground, uint8_t id){
+void minecraft::player::writeEntityRotation(int _yaw_i, int _pitch_i, bool on_ground, uint8_t id){
     packet p;
     (*mtx).lock();
     p.writeVarInt(0x29); // packet id
     p.writeVarInt(id);
-    p.writeByte(yaw);
-    p.writeByte(pitch);
+    p.writeByte(_yaw_i);
+    p.writeByte(_pitch_i);
     p.writeBoolean(on_ground);
+    writeLength(p.index);
+    S->write(p.buffer, p.index);
+    (*mtx).unlock();
+}
+
+void minecraft::player::writeEntityLook(int _yaw_i, uint8_t id){
+    packet p;
+    (*mtx).lock();
+    p.writeVarInt(0x3A); // packet id
+    p.writeVarInt(id);
+    p.writeByte(_yaw_i);
     writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
@@ -582,12 +602,12 @@ bool minecraft::player::join(){
     }
     connected = true;
     writeJoinGame();
-    writePlayerPositionAndLook(0, 5, 0, 5, 0, 0x00);
+    writePlayerPositionAndLook(0, 5, 0, 0, 0, 0x00);
     writeServerDifficulty();
     writeChunk();
     mc->broadcastPlayerInfo();
-    mc->broadcastSpawnPlayer();
     mc->broadcastChatMessage("joined the server", username);
+    mc->broadcastSpawnPlayer();
     return true;
 }
 
@@ -618,6 +638,9 @@ void minecraft::player::handle(){
             break;
         case 0x13:
             readPositionAndLook();
+            break;
+        case 0x00:
+            readTeleportConfirm();
             break;
         default:
             loginfo("id: 0x" + String(packetid, HEX) + " length: " + String(length));
