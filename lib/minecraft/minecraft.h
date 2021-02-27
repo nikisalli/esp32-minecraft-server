@@ -5,6 +5,30 @@
 #include <mutex>
 #include <array>
 
+class packet{
+    public:
+    uint8_t buffer[6000];
+    uint32_t index = 0;
+
+    void write(uint8_t val);
+    void write(uint8_t * buf, size_t size);
+
+    void writeDouble        (double value);
+    void writeFloat         (float value);
+    void writeVarInt        (int32_t value);
+    void writeVarLong       (int64_t value);
+    void writeString        (String str);
+    void writeUnsignedLong  (uint64_t num);
+    void writeUnsignedShort (uint16_t num);
+    void writeUnsignedByte  (uint8_t num);
+    void writeLong          (int64_t num);
+    void writeInt           (int32_t num);
+    void writeShort         (int16_t num);
+    void writeByte          (int8_t num);
+    void writeBoolean       (uint8_t val);
+    void writeUUID          (int user_id);
+};
+
 class minecraft{
     public:
     class player{
@@ -65,21 +89,6 @@ class minecraft{
         uint32_t VarIntLength   (int val);
         uint8_t readByte        ();
         bool readBool           ();
-
-        void writeDouble        (double value);
-        void writeFloat         (float value);
-        void writeVarInt        (int32_t value);
-        void writeVarLong       (int64_t value);
-        void writeString        (String str);
-        void writeUnsignedLong  (uint64_t num);
-        void writeUnsignedShort (uint16_t num);
-        void writeUnsignedByte  (uint8_t num);
-        void writeLong          (int64_t num);
-        void writeInt           (int32_t num);
-        void writeShort         (int16_t num);
-        void writeByte          (int8_t num);
-        void writeBoolean       (uint8_t val);
-        void writeUUID          (int user_id);
     };
 
     uint64_t tick = 0;

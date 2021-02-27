@@ -1,7 +1,16 @@
 #include "minecraft.h"
 #include <chunk.h>
 
-// TODO packet serialization abstraction
+// PACKET
+void packet::write(uint8_t val){
+    buffer[index] = val;
+    index ++;
+}
+
+void packet::write(uint8_t * buf, size_t size){
+    memcpy(buffer + index, std::move(buf), size);
+    index += size;
+}
 
 // SERVERBOUND LOGIN
 uint8_t minecraft::player::readHandShake(){
@@ -113,19 +122,20 @@ void minecraft::broadcastPlayerInfo(){
     // broadcast playerinfo
     for(auto player : players){
         if(player.connected){
+            packet pac;
             (*(player.mtx)).lock();
-            player.writeVarInt(len); //LENGTH 
-            player.writeVarInt(0x32);
-            player.writeVarInt(0); // action add player
-            player.writeVarInt(num); // number of players
+            pac.writeVarInt(len); //LENGTH 
+            pac.writeVarInt(0x32);
+            pac.writeVarInt(0); // action add player
+            pac.writeVarInt(num); // number of players
             for(auto p : players){
                 if(p.connected){
-                    player.writeUUID(p.id); // first player's uuid
-                    player.writeString(p.username);
-                    player.writeVarInt(0); // no properties given
-                    player.writeVarInt(0); // gamemode
-                    player.writeVarInt(100); // hardcoded ping TODO
-                    player.writeBoolean(0); // has display name
+                    pac.writeUUID(p.id); // first player's uuid
+                    pac.writeString(p.username);
+                    pac.writeVarInt(0); // no properties given
+                    pac.writeVarInt(0); // gamemode
+                    pac.writeVarInt(100); // hardcoded ping TODO
+                    pac.writeBoolean(0); // has display name
                 }
             }
             player.loginfo("player info sent");
@@ -144,167 +154,185 @@ uint8_t minecraft::getPlayerNum(){
 
 // CLIENTBOUND PLAYER
 void minecraft::player::writeChat(String msg, String username){
+    packet p;
     (*mtx).lock();
     String s = "{\"text\": \"<" + username + "> " + msg + "\",\"bold\": \"false\"}";
-    writeVarInt(19 + s.length());
-    writeVarInt(0x0E);
-    writeString(s);
-    writeByte(0);
-    writeUUID(id);
+    p.writeVarInt(19 + s.length());
+    p.writeVarInt(0x0E);
+    p.writeString(s);
+    p.writeByte(0);
+    p.writeUUID(id);
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
 void minecraft::player::writeLoginSuccess(){
+    packet p;
     (*mtx).lock();
-    writeVarInt(18 + username.length());
-    writeVarInt(0x02);
-    writeUUID(id);
-    writeString(username);
+    p.writeVarInt(18 + username.length());
+    p.writeVarInt(0x02);
+    p.writeUUID(id);
+    p.writeString(username);
+    S->write(p.buffer, p.index);
     loginfo("login success");
     (*mtx).unlock();
 }
 
 void minecraft::player::writeChunk(){
+    packet p;
     (*mtx).lock();
-    writeVarInt(5849); // entire packet length 
-    writeVarInt(0x20); 
-    writeInt(0); // X
-    writeInt(0); // Z
-    writeBoolean(1); // full chunk yes
-    writeVarInt(0x01); //bitmask set to 0xFF because we're sending the whole chunk
+    p.writeVarInt(5849); // entire packet length 
+    p.writeVarInt(0x20); 
+    p.writeInt(0); // X
+    p.writeInt(0); // Z
+    p.writeBoolean(1); // full chunk yes
+    p.writeVarInt(0x01); //bitmask set to 0xFF because we're sending the whole chunk
 
-    S->write(height_map_NBT, sizeof(height_map_NBT) / sizeof(height_map_NBT[0]));
+    p.write(height_map_NBT, sizeof(height_map_NBT) / sizeof(height_map_NBT[0]));
 
     uint8_t b[1024];
     memset(b, 127, 1024);
-    writeVarInt(1024); // array length 2 bytes as varint
-    S->write(b, 1024); // 127 = void biome
+    p.writeVarInt(1024); // array length 2 bytes as varint
+    p.write(b, 1024); // 127 = void biome
     
     //1362
-    writeVarInt(4487); // first subchunk has one byte more because of block count varint being two bytes long
+    p.writeVarInt(4487); // first subchunk has one byte more because of block count varint being two bytes long
 
     Serial.println("writing subchunk: " + String(0));
-    writeSubChunk(0);
+    p.writeShort(block_count[0]); // non-air blocks
+    p.writeUnsignedByte(8); // bits per block
+    p.writeVarInt(256); // palette length 8 bits per block
+    p.write(palette, 384); // write palette
+    p.writeVarInt(512); // we're sending 512 longs or 4096 bytes
+    uint8_t * buf = (uint8_t*)chunk;
+    p.write(buf, 4096);
 
-    writeVarInt(0); // no block entities
+    p.writeVarInt(0); // no block entities
+    S->write(p.buffer, p.index);
     loginfo("chunk sent");
     (*mtx).unlock();
 }
 
 void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags){
+    packet p;
     (*mtx).lock();
-    writeVarInt(35);
-    writeVarInt(0x34);
-    writeDouble(x);
-    writeDouble(y);
-    writeDouble(z);
-    writeFloat(yaw);
-    writeFloat(pitch);
-    writeUnsignedByte(flags);
-    writeVarInt(0x55);
+    p.writeVarInt(35);
+    p.writeVarInt(0x34);
+    p.writeDouble(x);
+    p.writeDouble(y);
+    p.writeDouble(z);
+    p.writeFloat(yaw);
+    p.writeFloat(pitch);
+    p.writeUnsignedByte(flags);
+    p.writeVarInt(0x55);
+    S->write(p.buffer, p.index);
     loginfo("player position and look sent");
     (*mtx).unlock();
 }
 
 void minecraft::player::writeKeepAlive(){
+    packet p;
     (*mtx).lock();
-    writeVarInt(9); //length
-    writeVarInt(0x1F);
+    p.writeVarInt(9); //length
+    p.writeVarInt(0x1F);
     uint32_t num = millis()/1000;
-    writeLong(num);
+    p.writeLong(num);
     loginfo("keepalive sent: " + String(num));
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
 void minecraft::player::writeServerDifficulty(){
+    packet p;
     (*mtx).lock();
-    writeVarInt(3);
-    writeVarInt(0x0D);
-    writeUnsignedByte(0);
-    writeBoolean(1);
+    p.writeVarInt(3);
+    p.writeVarInt(0x0D);
+    p.writeUnsignedByte(0);
+    p.writeBoolean(1);
     loginfo("server difficulty packet sent");
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
 void minecraft::player::writeSpawnPlayer(double x, double y, double z, int yaw, int pitch, uint8_t id){
+    packet p;
     (*mtx).lock();
-    writeVarInt(44); // length
-    writeVarInt(0x04);
-    writeVarInt(id); // player id
-    writeUUID(id); // player uuid
-    writeDouble(x); // player x
-    writeDouble(y); // player y
-    writeDouble(z); // player z
-    writeUnsignedByte(yaw); // player yaw
-    writeUnsignedByte(pitch); // player pitch
+    p.writeVarInt(44); // length
+    p.writeVarInt(0x04);
+    p.writeVarInt(id); // player id
+    p.writeUUID(id); // player uuid
+    p.writeDouble(x); // player x
+    p.writeDouble(y); // player y
+    p.writeDouble(z); // player z
+    p.writeUnsignedByte(yaw); // player yaw
+    p.writeUnsignedByte(pitch); // player pitch
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
 void minecraft::player::writeJoinGame(){
+    packet p;
     (*mtx).lock();
     loginfo("sending join game packet...");
-    writeVarInt(1462); // LENGTH
-    writeVarInt(0x24);
-    writeInt(id); // entity id
-    writeBoolean(0); // is hardcore
-    writeUnsignedByte(0); // gamemode
-    writeByte(-1); // previous gamemode
-    writeVarInt(1); // only one world
-    writeString("minecraft:overworld"); // only one world
-    S->write(dimension_codec_NBT, sizeof(dimension_codec_NBT) / sizeof(dimension_codec_NBT[0])); // NBT with world settings
-    S->write(dimension_NBT, sizeof(dimension_NBT) / sizeof(dimension_NBT[0])); // NBT with world settings
-    writeString("minecraft:overworld"); // spawn world
-    writeLong(0); // hashed seed
-    writeVarInt(10); // max players
-    writeVarInt(2); // view distance
-    writeBoolean(0); // reduced debug info
-    writeBoolean(0); // enable respawn screen
-    writeBoolean(0); // is debug world
-    writeBoolean(1); // is flat
+    p.writeVarInt(1462); // LENGTH
+    p.writeVarInt(0x24);
+    p.writeInt(id); // entity id
+    p.writeBoolean(0); // is hardcore
+    p.writeUnsignedByte(0); // gamemode
+    p.writeByte(-1); // previous gamemode
+    p.writeVarInt(1); // only one world
+    p.writeString("minecraft:overworld"); // only one world
+    p.write(dimension_codec_NBT, sizeof(dimension_codec_NBT) / sizeof(dimension_codec_NBT[0])); // NBT with world settings
+    p.write(dimension_NBT, sizeof(dimension_NBT) / sizeof(dimension_NBT[0])); // NBT with world settings
+    p.writeString("minecraft:overworld"); // spawn world
+    p.writeLong(0); // hashed seed
+    p.writeVarInt(10); // max players
+    p.writeVarInt(2); // view distance
+    p.writeBoolean(0); // reduced debug info
+    p.writeBoolean(0); // enable respawn screen
+    p.writeBoolean(0); // is debug world
+    p.writeBoolean(1); // is flat
     loginfo("join game packet sent");
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
 void minecraft::player::writeResponse(){
+    packet p;
     (*mtx).lock();
     loginfo("writing response packet...");
-    writeVarInt(506);
-    writeVarInt(0);
-    writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
+    p.writeVarInt(506);
+    p.writeVarInt(0);
+    p.writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
     loginfo("response packet sent");
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
 void minecraft::player::writePong(uint64_t payload){
+    packet p;
     (*mtx).lock();
-    writeVarInt(9); // length
-    writeVarInt(1); // packet id
-    writeLong(payload); // payload
+    p.writeVarInt(9); // length
+    p.writeVarInt(1); // packet id
+    p.writeLong(payload); // payload
     loginfo("pong sent");
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
-void minecraft::player::writeSubChunk(uint8_t index){
-    writeShort(block_count[index]); // non-air blocks
-    writeUnsignedByte(8); // bits per block
-    writeVarInt(256); // palette length 8 bits per block
-    S->write(palette, 384); // write palette
-    writeVarInt(512); // we're sending 512 longs or 4096 bytes
-    char * buf = (char*)chunk;
-    S->write(buf, 4096);
-}
-
 void minecraft::player::writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
+    packet p;
     (*mtx).lock();
-    writeVarInt(29); // length
-    writeVarInt(0x56); // packet id
-    writeVarInt(id);
-    writeDouble(x);
-    writeDouble(y);
-    writeDouble(z);
-    writeByte(yaw);
-    writeByte(pitch);
-    writeBoolean(on_ground);
+    p.writeVarInt(29); // length
+    p.writeVarInt(0x56); // packet id
+    p.writeVarInt(id);
+    p.writeDouble(x);
+    p.writeDouble(y);
+    p.writeDouble(z);
+    p.writeByte(yaw);
+    p.writeByte(pitch);
+    p.writeBoolean(on_ground);
+    S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
 
@@ -391,99 +419,98 @@ bool minecraft::player::readBool(){
 }
 
 // WRITE TYPES
-void minecraft::player::writeDouble(double value){
+void packet::writeDouble(double value){
     unsigned char * p = reinterpret_cast<unsigned char *>(&value);
     for(int i=7; i>=0; i--){
-        S->write(p[i]);
+        write(p[i]);
     }
 }
 
-void minecraft::player::writeFloat(float value) {
+void packet::writeFloat(float value) {
     unsigned char * p = reinterpret_cast<unsigned char *>(&value);
     for(int i=3; i>=0; i--){
-        S->write(p[i]);
+        write(p[i]);
     }
 }
 
-void minecraft::player::writeVarInt(int32_t value) {
+void packet::writeVarInt(int32_t value) {
     do {
         uint8_t temp = (uint8_t)(value & 0b01111111);
         value = lsr(value,7);
         if (value != 0) {
             temp |= 0b10000000;
         }
-        S->write(temp);
+        write(temp);
     } while (value != 0);
 }
 
-void minecraft::player::writeVarLong(int64_t value) {
+void packet::writeVarLong(int64_t value) {
     do {
         byte temp = (byte)(value & 0b01111111);
         value = lsr(value,7);
         if (value != 0) {
             temp |= 0b10000000;
         }
-        S->write(temp);
+        write(temp);
     } while (value != 0);
 }
 
-void minecraft::player::writeString(String str){
+void packet::writeString(String str){
     int length = str.length();
     byte buf[length + 1]; 
     str.getBytes(buf, length + 1);
     writeVarInt(length);
-    S->write(buf, length);
+    write(buf, length);
     /*for(int i=0; i<length; i++){
-        S->write(buf[i]);
+        write(buf[i]);
     }*/
 }
 
-void minecraft::player::writeLong(int64_t num){
+void packet::writeLong(int64_t num){
     for(int i=7; i>=0; i--){
-        S->write((uint8_t)((num >> (i*8)) & 0xff));
+        write((uint8_t)((num >> (i*8)) & 0xff));
     }
 }
 
-void minecraft::player::writeUnsignedLong(uint64_t num){
+void packet::writeUnsignedLong(uint64_t num){
     for(int i=7; i>=0; i--){
-        S->write((uint8_t)((num >> (i*8)) & 0xff));
+        write((uint8_t)((num >> (i*8)) & 0xff));
     }
 }
 
-void minecraft::player::writeUnsignedShort(uint16_t num){
-    S->write((byte)((num >> 8) & 0xff));
-    S->write((byte)(num & 0xff));
+void packet::writeUnsignedShort(uint16_t num){
+    write((byte)((num >> 8) & 0xff));
+    write((byte)(num & 0xff));
 }
 
-void minecraft::player::writeUnsignedByte(uint8_t num){
-    S->write(num);
+void packet::writeUnsignedByte(uint8_t num){
+    write(num);
 }
 
-void minecraft::player::writeInt(int32_t num){
-    S->write((byte)((num >> 24) & 0xff));
-    S->write((byte)((num >> 16) & 0xff));
-    S->write((byte)((num >> 8) & 0xff));
-    S->write((byte)(num & 0xff));
+void packet::writeInt(int32_t num){
+    write((byte)((num >> 24) & 0xff));
+    write((byte)((num >> 16) & 0xff));
+    write((byte)((num >> 8) & 0xff));
+    write((byte)(num & 0xff));
 }
 
-void minecraft::player::writeShort(int16_t num){
-    S->write((byte)((num >> 8) & 0xff));
-    S->write((byte)(num & 0xff));
+void packet::writeShort(int16_t num){
+    write((byte)((num >> 8) & 0xff));
+    write((byte)(num & 0xff));
 }
 
-void minecraft::player::writeByte(int8_t num){
-    S->write(num);
+void packet::writeByte(int8_t num){
+    write(num);
 }
 
-void minecraft::player::writeBoolean(uint8_t val){
-    S->write(val);
+void packet::writeBoolean(uint8_t val){
+    write(val);
 }
 
-void minecraft::player::writeUUID(int user_id){
-    for(int i = 0; i < 15; i++){
-        S->print(0);
-    }
-    S->write(user_id);
+void packet::writeUUID(int user_id){
+    uint8_t b[15] = {0};
+    write(b, 15);
+    write(user_id);
 }
 
 // HANDLERS

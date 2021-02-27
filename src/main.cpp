@@ -87,7 +87,7 @@ void loop(){
                 Serial.print("[INFO] New client connected: "); Serial.println(i);
                 char name[20];
                 snprintf(name, 20, "playerHandler%d", i);
-                xTaskCreatePinnedToCore(playerHandler, name, 10000, (void*)&serverClients[i], 2, NULL, i % 2);
+                xTaskCreatePinnedToCore(playerHandler, name, 50000, (void*)&serverClients[i], 2, NULL, i % 2);
                 return;  // restart loop
             }
         }
