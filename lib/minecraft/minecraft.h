@@ -67,6 +67,7 @@ class minecraft{
         void readPosition       ();
         void readRotation       ();
         void readKeepAlive      ();
+        void readPositionAndLook();
 
         void writeResponse      ();
         void writeLoginSuccess  ();

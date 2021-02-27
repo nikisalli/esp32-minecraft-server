@@ -18,7 +18,7 @@ int timeoutTime = 2000;
 void serverHandler(void * parameter){
     while(1){
         mc.handle();
-        vTaskDelay(pdMS_TO_TICKS(5000));
+        vTaskDelay(pdMS_TO_TICKS(20000));
     }
 }
 

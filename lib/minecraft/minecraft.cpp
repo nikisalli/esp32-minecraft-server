@@ -92,6 +92,19 @@ void minecraft::player::readKeepAlive(){
     login("keepalive received: " + String((long)readLong()));
 }
 
+void minecraft::player::readPositionAndLook(){
+    x = readDouble();
+    y = readDouble();
+    z = readDouble();
+    yaw = readFloat();
+    pitch = readFloat();
+    yaw_i = floor(fmap(yaw, 0, 360, 0, 256));
+    pitch_i = floor(fmap(pitch, 0, 360, 0, 256));
+    on_ground = readBool();
+    mc->broadcastPlayerPosAndLook(x, y, z, yaw_i, pitch_i, on_ground, id);
+    // login("player rotation " + String(yaw) + " " + String(pitch));
+}
+
 // CLIENTBOUND BROADCAST
 void minecraft::broadcastChatMessage(String msg, String username){
     for(auto player : players){
@@ -345,8 +358,8 @@ void minecraft::player::writeEntityTeleport(double x, double y, double z, int ya
     p.writeDouble(x);
     p.writeDouble(y);
     p.writeDouble(z);
-    p.writeByte(yaw);
-    p.writeByte(pitch);
+    p.writeByte(yaw_i);
+    p.writeByte(pitch_i);
     p.writeBoolean(on_ground);
     writeLength(p.index);
     S->write(p.buffer, p.index);
@@ -414,7 +427,6 @@ int64_t minecraft::player::readLong(){
 
 String minecraft::player::readString(){
     int length = readVarInt();
-    loginfo("<- text length to read: " + String(length) + " bytes");
     String result;
     for(int i=0; i<length; i++){
         while (S->available() < 1);
@@ -600,6 +612,12 @@ void minecraft::player::handle(){
             break;
         case 0x14:
             readRotation();
+            break;
+        case 0x10:
+            readKeepAlive();
+            break;
+        case 0x13:
+            readPositionAndLook();
             break;
         default:
             loginfo("id: 0x" + String(packetid, HEX) + " length: " + String(length));
