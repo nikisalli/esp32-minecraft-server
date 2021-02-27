@@ -74,14 +74,13 @@ class minecraft{
 
         void writeResponse      ();
         void writeLoginSuccess  ();
-        void writeChunk         ();
+        void writeChunk         (uint8_t x, uint8_t y);
         void writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags);
         void writeKeepAlive     ();
         void writeServerDifficulty();
         void writeSpawnPlayer   (double x, double y, double z, int yaw, int pitch, uint8_t id);
         void writeJoinGame      ();
         void writePong          (uint64_t payload);
-        void writeSubChunk      (uint8_t index);
         void writeChat          (String msg, String username);
         void writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id);
         void writeEntityRotation(int yaw, int pitch, bool on_ground, uint8_t id);

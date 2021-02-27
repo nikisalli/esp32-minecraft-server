@@ -257,12 +257,12 @@ void minecraft::player::writeLoginSuccess(){
     (*mtx).unlock();
 }
 
-void minecraft::player::writeChunk(){
+void minecraft::player::writeChunk(uint8_t x, uint8_t y){
     packet p;
     (*mtx).lock();
     p.writeVarInt(0x20); 
-    p.writeInt(0); // X
-    p.writeInt(0); // Z
+    p.writeInt(x); // X
+    p.writeInt(y); // Z
     p.writeBoolean(1); // full chunk yes
     p.writeVarInt(0x01); //bitmask set to 0xFF because we're sending the whole chunk
 
@@ -273,15 +273,14 @@ void minecraft::player::writeChunk(){
     p.writeVarInt(1024); // array length 2 bytes as varint
     p.write(b, 1024); // 127 = void biome
     
-    //1362
-    p.writeVarInt(4487); // first subchunk has one byte more because of block count varint being two bytes long
+    p.writeVarInt(4487); // magic 
 
-    p.writeShort(block_count[0]); // non-air blocks
+    p.writeShort(1); // non-air blocks (can't be bothered calculating it and the client doesn't need it)
     p.writeUnsignedByte(8); // bits per block
     p.writeVarInt(256); // palette length 8 bits per block
     p.write(palette, 384); // write palette
     p.writeVarInt(512); // we're sending 512 longs or 4096 bytes
-    uint8_t * buf = (uint8_t*)chunk;
+    uint8_t * buf = (uint8_t*)chunk[x][y];
     p.write(buf, 4096);
 
     p.writeVarInt(0); // no block entities
@@ -364,7 +363,7 @@ void minecraft::player::writeJoinGame(){
     p.writeString("minecraft:overworld"); // spawn world
     p.writeLong(0); // hashed seed
     p.writeVarInt(10); // max players
-    p.writeVarInt(2); // view distance
+    p.writeVarInt(12); // view distance
     p.writeBoolean(0); // reduced debug info
     p.writeBoolean(0); // enable respawn screen
     p.writeBoolean(0); // is debug world
@@ -694,7 +693,10 @@ bool minecraft::player::join(){
     writeJoinGame();
     writePlayerPositionAndLook(0, 5, 0, 0, 0, 0x00);
     writeServerDifficulty();
-    writeChunk();
+    writeChunk(0, 0);
+    writeChunk(0, 1);
+    writeChunk(1, 0);
+    writeChunk(1, 1);
     mc->broadcastPlayerInfo();
     mc->broadcastChatMessage(username + " joined the server", "Server");
     mc->broadcastSpawnPlayer();
