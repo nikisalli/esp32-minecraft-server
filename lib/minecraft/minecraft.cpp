@@ -118,6 +118,12 @@ void minecraft::player::readAnimation(){
     mc->broadcastEntityAnimation(readVarInt(), id);  
 }
 
+void minecraft::player::readEntityAction(){
+    readVarInt(); // we don't need our own id lmao
+    mc->broadcastEntityAction(readVarInt(), id);
+    readVarInt(); // we don't need horse jump boost
+}
+
 // CLIENTBOUND BROADCAST
 void minecraft::broadcastChatMessage(String msg, String username){
     for(auto player : players){
@@ -162,6 +168,14 @@ void minecraft::broadcastEntityAnimation(uint8_t anim, uint8_t id){
     for(auto player : players){
         if(player.connected && player.id != id){
             player.writeEntityAnimation(anim, id);
+        }
+    }
+}
+
+void minecraft::broadcastEntityAction(uint8_t action, uint8_t id){
+    for(auto player : players){
+        if(player.connected && player.id != id){
+            player.writeEntityAction(action, id);
         }
     }
 }
@@ -433,6 +447,29 @@ void minecraft::player::writeEntityAnimation(uint8_t anim, uint8_t id){
     (*mtx).unlock();
 }
 
+void minecraft::player::writeEntityAction(uint8_t action, uint8_t id){
+    packet p;
+    (*mtx).lock();
+    p.writeVarInt(0x44); // packet id
+    p.writeVarInt(id);
+    switch(action){
+        case 0:
+            p.writeUnsignedByte(6); // field unique id
+            p.writeVarInt(18); // we need only poses since swimming etc. isn't supported
+            p.writeVarInt(5); // sneak
+            break;
+        case 1:
+            p.writeUnsignedByte(6); // field unique id
+            p.writeVarInt(18); // we need only poses since swimming etc. isn't supported
+            p.writeVarInt(0); // stand
+            break;
+    }
+    p.writeUnsignedByte(0xFF); // terminate entity metadata array
+    writeLength(p.index);
+    S->write(p.buffer, p.index);
+    (*mtx).unlock();
+}
+
 // READ TYPES
 uint16_t minecraft::player::readUnsignedShort(){
     while(S->available() < 2);
@@ -678,6 +715,9 @@ void minecraft::player::handle(){
             break;
         case 0x2C:
             readAnimation();
+            break;
+        case 0x1C:
+            readEntityAction();
             break;
         default:
             loginfo("id: 0x" + String(packetid, HEX) + " length: " + String(length));

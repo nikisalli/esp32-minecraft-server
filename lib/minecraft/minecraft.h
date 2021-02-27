@@ -70,6 +70,7 @@ class minecraft{
         void readPositionAndLook();
         void readTeleportConfirm();
         void readAnimation      ();
+        void readEntityAction   ();
 
         void writeResponse      ();
         void writeLoginSuccess  ();
@@ -86,6 +87,7 @@ class minecraft{
         void writeEntityRotation(int yaw, int pitch, bool on_ground, uint8_t id);
         void writeEntityLook    (int yaw, uint8_t id);
         void writeEntityAnimation(uint8_t anim, uint8_t id);
+        void writeEntityAction  (uint8_t action, uint8_t id);
 
         void loginfo            (String msg);
         void logerr             (String msg);
@@ -116,6 +118,7 @@ class minecraft{
     void broadcastPlayerInfo         ();
     void broadcastPlayerRotation     (int yaw, int pitch, bool on_ground, uint8_t id);
     void broadcastEntityAnimation    (uint8_t anim, uint8_t id);
+    void broadcastEntityAction       (uint8_t action, uint8_t id);
     uint8_t getPlayerNum             ();
 };
 
