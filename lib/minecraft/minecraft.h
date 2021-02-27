@@ -43,6 +43,8 @@ class minecraft{
         double z;
         double yaw;
         double pitch;
+        int yaw_i;
+        int pitch_i;
         bool on_ground = true;
         float health = 0;
         uint8_t food = 0;
@@ -63,6 +65,8 @@ class minecraft{
 
         void readChat           ();
         void readPosition       ();
+        void readRotation       ();
+        void readKeepAlive      ();
 
         void writeResponse      ();
         void writeLoginSuccess  ();
@@ -76,9 +80,12 @@ class minecraft{
         void writeSubChunk      (uint8_t index);
         void writeChat          (String msg, String username);
         void writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id);
+        void writeEntityRotation(int yaw, int pitch, bool on_ground, uint8_t id);
 
         void loginfo            (String msg);
         void logerr             (String msg);
+        void login              (String msg);
+        void logout             (String msg);
 
         float readFloat         ();
         double readDouble       ();
@@ -89,6 +96,8 @@ class minecraft{
         uint32_t VarIntLength   (int val);
         uint8_t readByte        ();
         bool readBool           ();
+
+        void writeLength        (uint32_t length);
     };
 
     uint64_t tick = 0;
@@ -100,9 +109,11 @@ class minecraft{
     void broadcastSpawnPlayer        ();
     void broadcastPlayerPosAndLook   (double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id);
     void broadcastPlayerInfo         ();
-    uint8_t getPlayerNum                ();
+    void broadcastPlayerRotation     (int yaw, int pitch, bool on_ground, uint8_t id);
+    uint8_t getPlayerNum             ();
 };
 
 int32_t lsr(int32_t x, uint32_t n);
+float fmap(float x, float in_min, float in_max, float out_min, float out_max);
 
 #endif

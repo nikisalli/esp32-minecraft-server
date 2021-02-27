@@ -20,7 +20,6 @@ uint8_t minecraft::player::readHandShake(){
     readString(); // we don't need our name
     readUnsignedShort();
     int state = readVarInt();
-    loginfo("client state = " + String(state));
     if(id != 0){
         return false;
     } else if(protocol_version != 754){
@@ -52,7 +51,7 @@ uint64_t minecraft::player::readPing(){
     readVarInt(); // length
     readVarInt(); // packet id
     uint64_t payload = readLong(); // payload
-    loginfo("ping received " + String((uint32_t)payload));
+    login("ping " + String((uint32_t)payload));
     return payload;
 }
 
@@ -60,13 +59,13 @@ void minecraft::player::readRequest(){
     while(S->available() < 2);
     readVarInt();
     readVarInt();
-    loginfo("request packet received");
+    login("request packet received");
 }
 
 // SERVERBOUND PLAY PACKETS
 void minecraft::player::readChat(){
     String m = readString();
-    loginfo("<" + username + "> " + m);
+    login("<" + username + "> " + m);
     mc->broadcastChatMessage(m, username);
 }
 
@@ -76,14 +75,27 @@ void minecraft::player::readPosition(){
     z = readDouble();
     on_ground = readBool();
     mc->broadcastPlayerPosAndLook(x, y, z, yaw, pitch, on_ground, id);
-    // loginfo("player pos " + String(x) + " " + String(y) + " " + String(z));
+    // login("player pos " + String(x) + " " + String(y) + " " + String(z));
+}
+
+void minecraft::player::readRotation(){
+    yaw = readFloat();
+    pitch = readFloat();
+    yaw_i = floor(fmap(yaw, 0, 360, 0, 256));
+    pitch_i = floor(fmap(pitch, 0, 360, 0, 256));
+    on_ground = readBool();
+    mc->broadcastPlayerRotation(yaw_i, pitch_i, on_ground, id);
+    // login("player rotation " + String(yaw) + " " + String(pitch));
+}
+
+void minecraft::player::readKeepAlive(){
+    login("keepalive received: " + String((long)readLong()));
 }
 
 // CLIENTBOUND BROADCAST
 void minecraft::broadcastChatMessage(String msg, String username){
     for(auto player : players){
         if(player.connected){
-            player.loginfo("broadcasting message");
             player.writeChat(msg, username);
         }
     }
@@ -95,7 +107,6 @@ void minecraft::broadcastSpawnPlayer(){
             for(auto p : players){
                 if(p.id != player.id && p.connected){
                     player.writeSpawnPlayer(p.x, p.y, p.z, p.yaw, p.pitch, p.id);
-                    player.loginfo("spawn player packet sent for p" + String(p.id));
                 }
             }
         }
@@ -106,6 +117,14 @@ void minecraft::broadcastPlayerPosAndLook(double x, double y, double z, int yaw,
     for(auto player : players){
         if(player.connected && player.id != id){
             player.writeEntityTeleport(x, y, z, yaw, pitch, on_ground, id);
+        }
+    }
+}
+
+void minecraft::broadcastPlayerRotation(int yaw_i, int pitch_i, bool on_ground, uint8_t id){
+    for(auto player : players){
+        if(player.connected && player.id != id){
+            player.writeEntityRotation(yaw_i, pitch_i, on_ground, id);
         }
     }
 }
@@ -138,7 +157,7 @@ void minecraft::broadcastPlayerInfo(){
                     pac.writeBoolean(0); // has display name
                 }
             }
-            player.loginfo("player info sent");
+            player.login("player info sent");
             (*(player.mtx)).unlock();
         }
     }
@@ -157,11 +176,11 @@ void minecraft::player::writeChat(String msg, String username){
     packet p;
     (*mtx).lock();
     String s = "{\"text\": \"<" + username + "> " + msg + "\",\"bold\": \"false\"}";
-    p.writeVarInt(19 + s.length());
     p.writeVarInt(0x0E);
     p.writeString(s);
     p.writeByte(0);
     p.writeUUID(id);
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -169,19 +188,18 @@ void minecraft::player::writeChat(String msg, String username){
 void minecraft::player::writeLoginSuccess(){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(18 + username.length());
     p.writeVarInt(0x02);
     p.writeUUID(id);
     p.writeString(username);
+    writeLength(p.index);
     S->write(p.buffer, p.index);
-    loginfo("login success");
+    logout("login success sent");
     (*mtx).unlock();
 }
 
 void minecraft::player::writeChunk(){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(5849); // entire packet length 
     p.writeVarInt(0x20); 
     p.writeInt(0); // X
     p.writeInt(0); // Z
@@ -198,7 +216,6 @@ void minecraft::player::writeChunk(){
     //1362
     p.writeVarInt(4487); // first subchunk has one byte more because of block count varint being two bytes long
 
-    Serial.println("writing subchunk: " + String(0));
     p.writeShort(block_count[0]); // non-air blocks
     p.writeUnsignedByte(8); // bits per block
     p.writeVarInt(256); // palette length 8 bits per block
@@ -208,15 +225,15 @@ void minecraft::player::writeChunk(){
     p.write(buf, 4096);
 
     p.writeVarInt(0); // no block entities
+    writeLength(p.index);
     S->write(p.buffer, p.index);
-    loginfo("chunk sent");
+    logout("chunk sent");
     (*mtx).unlock();
 }
 
 void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float yaw, float pitch, uint8_t flags){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(35);
     p.writeVarInt(0x34);
     p.writeDouble(x);
     p.writeDouble(y);
@@ -225,19 +242,20 @@ void minecraft::player::writePlayerPositionAndLook(double x, double y, double z,
     p.writeFloat(pitch);
     p.writeUnsignedByte(flags);
     p.writeVarInt(0x55);
+    writeLength(p.index);
     S->write(p.buffer, p.index);
-    loginfo("player position and look sent");
+    logout("player position and look sent");
     (*mtx).unlock();
 }
 
 void minecraft::player::writeKeepAlive(){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(9); //length
     p.writeVarInt(0x1F);
     uint32_t num = millis()/1000;
     p.writeLong(num);
-    loginfo("keepalive sent: " + String(num));
+    logout("keepalive sent: " + String(num));
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -245,11 +263,11 @@ void minecraft::player::writeKeepAlive(){
 void minecraft::player::writeServerDifficulty(){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(3);
     p.writeVarInt(0x0D);
     p.writeUnsignedByte(0);
     p.writeBoolean(1);
-    loginfo("server difficulty packet sent");
+    logout("server difficulty packet sent");
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -257,7 +275,6 @@ void minecraft::player::writeServerDifficulty(){
 void minecraft::player::writeSpawnPlayer(double x, double y, double z, int yaw, int pitch, uint8_t id){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(44); // length
     p.writeVarInt(0x04);
     p.writeVarInt(id); // player id
     p.writeUUID(id); // player uuid
@@ -266,15 +283,15 @@ void minecraft::player::writeSpawnPlayer(double x, double y, double z, int yaw, 
     p.writeDouble(z); // player z
     p.writeUnsignedByte(yaw); // player yaw
     p.writeUnsignedByte(pitch); // player pitch
+    writeLength(p.index);
     S->write(p.buffer, p.index);
+    logout("spawn player sent");
     (*mtx).unlock();
 }
 
 void minecraft::player::writeJoinGame(){
     packet p;
     (*mtx).lock();
-    loginfo("sending join game packet...");
-    p.writeVarInt(1462); // LENGTH
     p.writeVarInt(0x24);
     p.writeInt(id); // entity id
     p.writeBoolean(0); // is hardcore
@@ -292,7 +309,8 @@ void minecraft::player::writeJoinGame(){
     p.writeBoolean(0); // enable respawn screen
     p.writeBoolean(0); // is debug world
     p.writeBoolean(1); // is flat
-    loginfo("join game packet sent");
+    logout("join game packet sent");
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -300,11 +318,10 @@ void minecraft::player::writeJoinGame(){
 void minecraft::player::writeResponse(){
     packet p;
     (*mtx).lock();
-    loginfo("writing response packet...");
-    p.writeVarInt(506);
     p.writeVarInt(0);
     p.writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
-    loginfo("response packet sent");
+    logout("response packet sent");
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -312,10 +329,10 @@ void minecraft::player::writeResponse(){
 void minecraft::player::writePong(uint64_t payload){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(9); // length
-    p.writeVarInt(1); // packet id
+    p.writeVarInt(0x01); // packet id
     p.writeLong(payload); // payload
-    loginfo("pong sent");
+    logout("pong");
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -323,7 +340,6 @@ void minecraft::player::writePong(uint64_t payload){
 void minecraft::player::writeEntityTeleport(double x, double y, double z, int yaw, int pitch, bool on_ground, uint8_t id){
     packet p;
     (*mtx).lock();
-    p.writeVarInt(29); // length
     p.writeVarInt(0x56); // packet id
     p.writeVarInt(id);
     p.writeDouble(x);
@@ -332,6 +348,20 @@ void minecraft::player::writeEntityTeleport(double x, double y, double z, int ya
     p.writeByte(yaw);
     p.writeByte(pitch);
     p.writeBoolean(on_ground);
+    writeLength(p.index);
+    S->write(p.buffer, p.index);
+    (*mtx).unlock();
+}
+
+void minecraft::player::writeEntityRotation(int yaw, int pitch, bool on_ground, uint8_t id){
+    packet p;
+    (*mtx).lock();
+    p.writeVarInt(0x29); // packet id
+    p.writeVarInt(id);
+    p.writeByte(yaw);
+    p.writeByte(pitch);
+    p.writeBoolean(on_ground);
+    writeLength(p.index);
     S->write(p.buffer, p.index);
     (*mtx).unlock();
 }
@@ -513,6 +543,17 @@ void packet::writeUUID(int user_id){
     write(user_id);
 }
 
+void minecraft::player::writeLength(uint32_t length){
+    do {
+        uint8_t temp = (uint8_t)(length & 0b01111111);
+        length = lsr(length,7);
+        if (length != 0) {
+            temp |= 0b10000000;
+        }
+        S->write(temp);
+    } while (length != 0);
+}
+
 // HANDLERS
 bool minecraft::player::join(){
     uint8_t res = readHandShake();
@@ -533,8 +574,8 @@ bool minecraft::player::join(){
     writeServerDifficulty();
     writeChunk();
     mc->broadcastPlayerInfo();
-    mc->broadcastChatMessage("joined the server", username);
     mc->broadcastSpawnPlayer();
+    mc->broadcastChatMessage("joined the server", username);
     return true;
 }
 
@@ -550,8 +591,6 @@ void minecraft::player::handle(){
     if(S->available() > 2){
         uint32_t length = S->read();
         uint32_t packetid = S->read();
-        //Serial.print(S->read(), HEX);
-        //Serial.print(" ");
         switch (packetid){
         case 0x03:
             readChat();
@@ -559,7 +598,11 @@ void minecraft::player::handle(){
         case 0x12:
             readPosition();
             break;
+        case 0x14:
+            readRotation();
+            break;
         default:
+            loginfo("id: 0x" + String(packetid, HEX) + " length: " + String(length));
             for(int i=0; i < length - VarIntLength(packetid); i++ ){
                 while (S->available() < 1);
                 // loginfo("packet id " + String(packetid));
@@ -579,6 +622,14 @@ void minecraft::player::logerr(String msg){
     Serial.println( "[ERROR] p" + String(id) + " " + msg);
 }
 
+void minecraft::player::login(String msg){
+    Serial.println( "[INFO] p" + String(id) + " <- " + msg);
+}
+
+void minecraft::player::logout(String msg){
+    Serial.println( "[INFO] p" + String(id) + " -> " + msg);
+}
+
 int32_t lsr(int32_t x, uint32_t n){
   return (int32_t)((uint32_t)x >> n);
 }
@@ -588,4 +639,8 @@ uint32_t minecraft::player::VarIntLength(int val) {
         return 1;
     }
     return (int)floor(log(val) / log(128)) + 1;
+}
+
+float fmap(float x, float in_min, float in_max, float out_min, float out_max) {
+  return (float)(x - in_min) * (out_max - out_min) / (float)(in_max - in_min) + out_min;
 }
