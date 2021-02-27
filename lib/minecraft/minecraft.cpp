@@ -180,6 +180,14 @@ void minecraft::broadcastEntityAction(uint8_t action, uint8_t id){
     }
 }
 
+void minecraft::broadcastEntityDestroy(uint8_t id){
+    for(auto player : players){
+        if(player.connected && player.id != id){
+            player.writeEntityDestroy(id);
+        }
+    }
+}
+
 void minecraft::broadcastPlayerInfo(){
     // calculate data length in a horrible non-automated way for now TODO
     uint32_t num = getPlayerNum();
@@ -470,6 +478,17 @@ void minecraft::player::writeEntityAction(uint8_t action, uint8_t id){
     (*mtx).unlock();
 }
 
+void minecraft::player::writeEntityDestroy(uint8_t id){
+    packet p;
+    (*mtx).lock();
+    p.writeVarInt(0x36); // packet id
+    p.writeVarInt(1); // entity count
+    p.writeVarInt(id);
+    writeLength(p.index);
+    S->write(p.buffer, p.index);
+    (*mtx).unlock();
+}
+
 // READ TYPES
 uint16_t minecraft::player::readUnsignedShort(){
     while(S->available() < 2);
@@ -677,7 +696,7 @@ bool minecraft::player::join(){
     writeServerDifficulty();
     writeChunk();
     mc->broadcastPlayerInfo();
-    mc->broadcastChatMessage("joined the server", username);
+    mc->broadcastChatMessage(username + " joined the server", "Server");
     mc->broadcastSpawnPlayer();
     return true;
 }

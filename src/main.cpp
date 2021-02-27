@@ -37,6 +37,8 @@ void playerHandler(void * parameter){
         vTaskDelay(pdMS_TO_TICKS(10));
     }
 
+    mc.broadcastEntityDestroy(mc.players[client.id].id);
+    mc.broadcastChatMessage(mc.players[client.id].username + " left the server", "Server");
     end:
     mc.players[client.id].loginfo("client " + String(client.id) + " disconnected");
     client.socket.stop();
