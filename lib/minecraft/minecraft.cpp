@@ -12,6 +12,24 @@ void packet::write(uint8_t * buf, size_t size){
     index += size;
 }
 
+void packet::serverWriteVarInt(int32_t value){
+    do {
+        uint8_t temp = (uint8_t)(value & 0b01111111);
+        value = lsr(value,7);
+        if (value != 0) {
+            temp |= 0b10000000;
+        }
+        S->write(temp);
+    } while (value != 0);
+}
+
+void packet::writePacket(){
+    (*mtx).lock();
+    serverWriteVarInt(index);
+    S->write(buffer, index);
+    (*mtx).unlock();
+}
+
 // SERVERBOUND LOGIN
 uint8_t minecraft::player::readHandShake(){
     readVarInt(); // length
@@ -200,8 +218,7 @@ void minecraft::broadcastPlayerInfo(){
     // broadcast playerinfo
     for(auto player : players){
         if(player.connected){
-            packet pac;
-            (*(player.mtx)).lock();
+            packet pac(player.S, player.mtx);
             pac.writeVarInt(0x32);
             pac.writeVarInt(0); // action add player
             pac.writeVarInt(num); // number of players
@@ -215,10 +232,8 @@ void minecraft::broadcastPlayerInfo(){
                     pac.writeBoolean(0); // has display name
                 }
             }
-            player.writeLength(pac.index);
-            player.S->write(pac.buffer, pac.index);
+            pac.writePacket();
             player.login("player info sent");
-            (*(player.mtx)).unlock();
         }
     }
 }
@@ -233,33 +248,26 @@ uint8_t minecraft::getPlayerNum(){
 
 // CLIENTBOUND PLAYER
 void minecraft::player::writeChat(String msg, String username){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     String s = "{\"text\": \"<" + username + "> " + msg + "\",\"bold\": \"false\"}";
     p.writeVarInt(0x0E);
     p.writeString(s);
     p.writeByte(0);
     p.writeUUID(id);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeLoginSuccess(){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x02);
     p.writeUUID(id);
     p.writeString(username);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
+    p.writePacket();
     logout("login success sent");
-    (*mtx).unlock();
 }
 
 void minecraft::player::writeChunk(uint8_t x, uint8_t y){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x20); 
     p.writeInt(x); // X
     p.writeInt(y); // Z
@@ -284,15 +292,12 @@ void minecraft::player::writeChunk(uint8_t x, uint8_t y){
     p.write(buf, 4096);
 
     p.writeVarInt(0); // no block entities
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
+    p.writePacket();
     logout("chunk sent");
-    (*mtx).unlock();
 }
 
 void minecraft::player::writePlayerPositionAndLook(double x, double y, double z, float _yaw, float _pitch, uint8_t flags){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x34);
     p.writeDouble(x);
     p.writeDouble(y);
@@ -301,39 +306,30 @@ void minecraft::player::writePlayerPositionAndLook(double x, double y, double z,
     p.writeFloat(_pitch);
     p.writeUnsignedByte(flags);
     p.writeVarInt(0x55);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
+    p.writePacket();
     logout("player position and look sent");
-    (*mtx).unlock();
 }
 
 void minecraft::player::writeKeepAlive(){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x1F);
     uint32_t num = millis()/1000;
     p.writeLong(num);
     logout("keepalive sent: " + String(num));
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeServerDifficulty(){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x0D);
     p.writeUnsignedByte(0);
     p.writeBoolean(1);
     logout("server difficulty packet sent");
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeSpawnPlayer(double x, double y, double z, int _yaw_i, int _pitch_i, uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x04);
     p.writeVarInt(id); // player id
     p.writeUUID(id); // player uuid
@@ -342,15 +338,12 @@ void minecraft::player::writeSpawnPlayer(double x, double y, double z, int _yaw_
     p.writeDouble(z); // player z
     p.writeUnsignedByte(_yaw_i); // player yaw
     p.writeUnsignedByte(_pitch_i); // player pitch
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
+    p.writePacket();
     logout("spawn player sent id:" + String(id));
-    (*mtx).unlock();
 }
 
 void minecraft::player::writeJoinGame(){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x24);
     p.writeInt(id); // entity id
     p.writeBoolean(0); // is hardcore
@@ -369,36 +362,27 @@ void minecraft::player::writeJoinGame(){
     p.writeBoolean(0); // is debug world
     p.writeBoolean(1); // is flat
     logout("join game packet sent");
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeResponse(){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0);
     p.writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
     logout("response packet sent");
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writePong(uint64_t payload){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x01); // packet id
     p.writeLong(payload); // payload
     logout("pong");
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeEntityTeleport(double x, double y, double z, int _yaw_i, int _pitch_i, bool on_ground, uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x56); // packet id
     p.writeVarInt(id);
     p.writeDouble(x);
@@ -407,38 +391,29 @@ void minecraft::player::writeEntityTeleport(double x, double y, double z, int _y
     p.writeByte(_yaw_i);
     p.writeByte(_pitch_i);
     p.writeBoolean(on_ground);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeEntityRotation(int _yaw_i, int _pitch_i, bool on_ground, uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x29); // packet id
     p.writeVarInt(id);
     p.writeByte(_yaw_i);
     p.writeByte(_pitch_i);
     p.writeBoolean(on_ground);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeEntityLook(int _yaw_i, uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x3A); // packet id
     p.writeVarInt(id);
     p.writeByte(_yaw_i);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeEntityAnimation(uint8_t anim, uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x05); // packet id
     p.writeVarInt(id);
     switch(anim){
@@ -449,14 +424,11 @@ void minecraft::player::writeEntityAnimation(uint8_t anim, uint8_t id){
             p.writeByte(3);
             break;
     }
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeEntityAction(uint8_t action, uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x44); // packet id
     p.writeVarInt(id);
     switch(action){
@@ -472,20 +444,15 @@ void minecraft::player::writeEntityAction(uint8_t action, uint8_t id){
             break;
     }
     p.writeUnsignedByte(0xFF); // terminate entity metadata array
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 void minecraft::player::writeEntityDestroy(uint8_t id){
-    packet p;
-    (*mtx).lock();
+    packet p(S, mtx);
     p.writeVarInt(0x36); // packet id
     p.writeVarInt(1); // entity count
     p.writeVarInt(id);
-    writeLength(p.index);
-    S->write(p.buffer, p.index);
-    (*mtx).unlock();
+    p.writePacket();
 }
 
 // READ TYPES

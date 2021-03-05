@@ -9,9 +9,17 @@ class packet{
     public:
     uint8_t buffer[6000];
     uint32_t index = 0;
+    Stream* S;
+    std::mutex * mtx;
+
+    packet(Stream* __S, std::mutex * _mtx){
+        S = __S;
+        mtx = _mtx;
+    }
 
     void write(uint8_t val);
     void write(uint8_t * buf, size_t size);
+    void writePacket();
 
     void writeDouble        (double value);
     void writeFloat         (float value);
@@ -27,13 +35,16 @@ class packet{
     void writeByte          (int8_t num);
     void writeBoolean       (uint8_t val);
     void writeUUID          (int user_id);
+
+    // write to client
+    void serverWriteVarInt  (int32_t value);
 };
 
 class minecraft{
     public:
     class player{
         public:
-        std::mutex * mtx;
+        std::mutex* mtx;
         Stream* S;
         minecraft* mc;
         bool connected = false;
