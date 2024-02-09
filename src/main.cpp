@@ -79,6 +79,18 @@ void setup() {
 
 void loop(){
     uint8_t i;
+    
+    // Check if WiFi is connected
+    if (WiFi.status() != WL_CONNECTED) {
+        Serial.println("WiFi disconnected. Reconnecting...");
+        WiFi.begin(ssid, password); // Attempt to reconnect
+        while (WiFi.status() != WL_CONNECTED) {
+            delay(1000);
+            Serial.println("Attempting to reconnect to WiFi...");
+        }
+        Serial.println("Reconnected to WiFi.");
+    }
+    
     //check if there are any new clients
     if (server.hasClient()){
         for(i = 0; i < MAX_PLAYERS; i++){
