@@ -6,6 +6,6 @@ int server_port = 22222;
 const char* ssid = "your ssid";
 const char* password = "your password";
 
-const int MAX_PLAYERS = 2;
+const int MAX_PLAYERS = 5;
 
 #endif
