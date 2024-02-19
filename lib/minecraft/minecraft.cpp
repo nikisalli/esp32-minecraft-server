@@ -227,7 +227,7 @@ void minecraft::broadcastPlayerInfo(){
                     pac.writeUUID(p.id); // first player's uuid
                     pac.writeString(p.username);
                     pac.writeVarInt(0); // no properties given
-                    pac.writeVarInt(0); // gamemode
+                    pac.writeVarInt(1); // gamemode
                     pac.writeVarInt(100); // hardcoded ping TODO
                     pac.writeBoolean(0); // has display name
                 }
@@ -347,7 +347,7 @@ void minecraft::player::writeJoinGame(){
     p.writeVarInt(0x24);
     p.writeInt(id); // entity id
     p.writeBoolean(0); // is hardcore
-    p.writeUnsignedByte(0); // gamemode
+    p.writeUnsignedByte(1); // gamemode
     p.writeByte(-1); // previous gamemode
     p.writeVarInt(1); // only one world
     p.writeString("minecraft:overworld"); // only one world
@@ -368,7 +368,8 @@ void minecraft::player::writeJoinGame(){
 void minecraft::player::writeResponse(){
     packet p(S, mtx);
     p.writeVarInt(0);
-    p.writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"esp32 server\"}}");
+    // In the below line, if there is an error from the favicon being too large in size, consider compressing it or increasing "buffer" from 6000 in minecraft.h.
+    p.writeString("{\"version\": {\"name\": \"1.16.5\",\"protocol\": 754},\"players\": {\"max\": 5,\"online\": 5,\"sample\": [{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000000\"},{\"name\": \"L_SS__S_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000001\"},{\"name\": \"L_S_S_S_S_SS___L\",\"id\": \"00000000-0000-0000-0000-000000000002\"},{\"name\": \"L_S__SS_S_S_S__L\",\"id\": \"00000000-0000-0000-0000-000000000003\"},{\"name\": \"L_S___S_S_S__S_L\",\"id\": \"00000000-0000-0000-0000-000000000004\"}]},\"description\": {\"text\": \"A Minecraft server running on an ESP32!\"},\"favicon\":\"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABACAMAAACdt4HsAAABU1BMVEUAAAAWMxcBAwELHwwBBAECCgMMIQ0AAgABAgEBBgEBBAEBBQEAAwECCAIDEAQDDgQDDgQDDAQLIAsQKhIZPRsBCAEBBgEDDgMIGwgGFgcKHwsUMhQDDwMGFwYCCAICCQIGFgcCCQMIHAkEEAQLIwwFEwUKHAoDDAMBAwEDDgMCCQIFEwUCCgIIHAkCCgIDCgMMJA0IGgkRLBISLBIEEQQBBQEBBgEDEAMEEAQBBAEFEwUDCwMHGggIGwgCCgMIGwgDDARMr1AAAAABBAFLrk9FoUlJqU1Bl0QjWiYHHAdKqk5Goko5hjw2gTkfTyEVOxYLJwwCDAI1fjg0fDcRMhIOLA9HpUtEnkgzejYtbzAsay4oYysmXyglXSchVSM/lUM6iD0SNhQPLxEIIAkFGAZEn0hDnUcqZywUOBYDEgQ3gjo/k0I+kUE8jkAxdTQbRhwaRhyU8jDPAAAAQXRSTlMABPsT0YwI9/Tr4LTw2tOHZVomEQf0y8ZoQjwN3a+vkYp6dm9dUyH65uW4tpeRc2hVKh4ZzMe+pKCYlSq8u6h/XiA2BHYAAAPMSURBVFjDzZdZVxNBEIU7Y0ICCRokgIiAiOACCIr7Pt+EhCxkIQlLgLAruP//JzM4xMx0JRLP8Rzv43RVddXtqtvT6l/D5/tbz+m+QNh/1wCj2x8O9F3tzHt4vAcPemaHL5rMpQnH28rXdra2dmp5y4kxceki7oEQQLm6tx43HaTX96plgFDgTyF8DyLA4WYybnoQT24eApHJtoW8GgTKKwlTRGKlDAw+bO0/H4RUKW22RLqUgmC0VfovgOWM2RaZZWBWLKMrDKcr5h/x6RTCXYL/U6gkzQsgWYGnWgRfGPJL5oWwlIewt4oXkJfKl4nIw6zbPwoVeX85hwpEXecf5DRpdoDkKcGHTQQMworZEVZg8DcNk7BsdohlmGzMT4RUptMAmRSR88kKQMnsGCW46SQQopzuPEC6zMCvFCbaMZhItOPxlrLRw6FsdbyRO4RUbuNYjn3IjTP9g02xWbZpYFtssk24Xg8wDlIPZY+AgaFnz4ZCQCordRPMnVVQieuLG8DjhdjZnE4NAhu6TfzArmEaPupre2DcUg1MGrCnW32ER6oPslKXGAuqCVMGqSVpmwUVgA/aypZ9Qi48gC3N7IPdS2FIawcAl30ewfFjaSmkYVT5OdEir8Jt5UEfrGqGeS6ru+SESbszojwYCQoTm+OeMoTv5XpgDX72pZ0UbGvfLd4oDfexNMNtLDkAry8eQCrtRC7hRCpBJHEHo9/r32+wI5LoJ6/fXnBNeRCFT0KqfjUmNNJakRsxt3+sl+Ka0Ehj6orUylW7R12om1WlVr6ipqRhWitguYqIWhTWdM2AKfVIHOcvFgS6Gjd3wML60mKcVa8oKFkLLscag4QlSFK8Qq99K8iS9hWMRUf3DfgqmOxCoL58HaqyaD9XDp7Lwl89E1W7hlRConFgUTlYDEkUJlLcOBebVUmy36kGJiTpXz2Xrf4IB94Ujovca5KErh6K694EDoj0N5pkQ5sGbnv0aEcX/ivnc9LNkVvvPsNj5cIT+OzWzSO6GxM3D7V48wF/t/l14brFD5dJrXngfE/cPGZttfXgLWTdDA41CffVEMXdZnqC09oLJthM9W6RAdcj5j0UGjR/02bRofpb45AKmvCPw75DZKZOz4jSMFKnOuMQuA9znmXfGOz/ymHLpkdA9Px2W9+HUZ/2s30fCjYPSf1e+z2USbv+AszEhN/1MSiW4vEcDCsRw5CLx1eLMBoTdxgHaiWYUS0wA6UaMOdTMvpCAEbLR9FVA2DA4V+0GAJetl5/CQy1f8TOd/deavOo7O2+5lP/GX4CF6CJedzJaM4AAAAASUVORK5CYII=\"}");
     logout("response packet sent");
     p.writePacket();
 }
